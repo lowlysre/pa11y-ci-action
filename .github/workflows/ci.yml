@@ -24,6 +24,8 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - uses: lowlydba/sustainable-npm@4cc1da285e5a589a7b3816122f791c21ec6ff3e6 # v4.0.0
+        with:
+          ignore-scripts: ${{ matrix.node-version != '22' }}
       - run: npm ci
       - run: npm test
       - run: npm run test:integration

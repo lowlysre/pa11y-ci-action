@@ -20,7 +20,7 @@ export async function installPa11yCi(version, {
 	fs.writeFileSync(manifest, JSON.stringify({private: true, dependencies: {'pa11y-ci': version}}));
 	await execute('npm', [
 		'install', '--prefix', directory, '--omit=dev', '--ignore-scripts=false',
-		'--no-audit', '--no-fund', '--package-lock=false'
+		'--no-audit', '--no-fund', '--no-save', '--package-lock=false'
 	], {cwd: directory});
 	return createRequire(manifest).resolve('pa11y-ci/bin/pa11y-ci.js');
 }
