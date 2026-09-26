@@ -108,6 +108,7 @@ jobs:
 | `concurrency` | Pages to test in parallel. Only used when no config file is found. | `1` |
 | `working-directory` | Directory to resolve the config file and run pa11y-ci from. | `.` |
 | `pa11y-ci-version` | Version of `pa11y-ci` to install and run, as an npm version range. | `4.1.1` |
+| `cache` | Cache the Chromium build between runs. Set to `false` to download it fresh every run. | `true` |
 | `comment-on-pr` | Post or update a sticky summary comment on the triggering pull request. | `false` |
 | `github-token` | Token used for `comment-on-pr`. Needs `pull-requests: write`. | `github.token` |
 
@@ -120,6 +121,7 @@ jobs:
 | `total-issues` | Total issues found across all URLs. |
 | `passed` | `true` if the run was within the configured threshold. |
 | `report-json` | Path to the raw pa11y-ci JSON report on the runner's temp directory. |
+| `cache-hit` | `true` if the Chromium cache was restored. Empty when `cache` is `false`. |
 
 ### Permissions
 
@@ -138,8 +140,7 @@ You can, and plenty of repos do. This wraps that in one `uses:` line with a pinn
 
 ### Known gaps
 
-- pa11y-ci's dependency chain (puppeteer via `pa11y`) currently pulls in a vulnerable `extract-zip` ([GHSA-jmr9-qjv8-65gv](https://github.com/advisories/GHSA-jmr9-qjv8-65gv), [GHSA-7pqw-9j4j-h8q3](https://github.com/advisories/GHSA-7pqw-9j4j-h8q3)), used only to unpack the downloaded Chromium build. There's no non-breaking fix upstream at time of writing; `npm audit fix --force` downgrades `pa11y-ci` to `3.1.0`, which is a breaking change. This applies to whatever `pa11y-ci-version` you install, not just this action's default.
-- Each run installs `pa11y-ci` fresh and downloads a Chromium build, since neither is cached between runs. Caching that install (keyed on `pa11y-ci-version`) is a reasonable follow-up if run time becomes a problem.
+- The Chromium cache is keyed on the literal `pa11y-ci-version` string. With a range like `^4.0.0`, a newer pa11y-ci that needs a newer Chromium downloads it every run until the range string changes. Pin an exact version to avoid that.
 - On `ubuntu-latest` runners (Ubuntu 24.04+), Chromium's sandbox fails with `No usable sandbox!` because of an [AppArmor restriction on unprivileged user namespaces](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md). This is a runner/Chromium interaction outside this action's control, and it affects `npx pa11y-ci` and any other puppeteer-based action the same way. Add this step before this action in your workflow:
 
   ```yaml

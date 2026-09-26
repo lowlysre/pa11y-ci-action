@@ -35,6 +35,10 @@ inputs:
     description: 'Version of `pa11y-ci` to install and run, as an npm version range (e.g. `4.1.1`, `^4.0.0`).'
     required: false
     default: '4.1.1'
+  cache:
+    description: 'Cache the Chromium build pa11y-ci downloads, keyed on OS, architecture, and `pa11y-ci-version`. Set to `false` to download it fresh every run.'
+    required: false
+    default: 'true'
   comment-on-pr:
     description: 'Post or update a sticky summary comment on the triggering pull request.'
     required: false
@@ -60,18 +64,34 @@ outputs:
   report-json:
     description: 'Path to the raw pa11y-ci JSON report written to the runner temp directory.'
     value: ${{ steps.run.outputs.report-json }}
+  cache-hit:
+    description: '`true` if the Chromium cache was restored. Empty when `cache` is `false`.'
+    value: ${{ steps.cache.outputs.cache-hit }}
 
 runs:
   using: 'composite'
   steps:
+    - name: Cache Chromium
+      id: cache
+      if: inputs.cache == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/pa11y-ci-action/puppeteer
+        key: pa11y-ci-action-chromium-${{ runner.os }}-${{ runner.arch }}-${{ inputs.pa11y-ci-version }}
     - name: Install pa11y-ci
       shell: bash
-      run: npm install --no-save --no-audit --no-fund --prefix "${{ github.action_path }}" "pa11y-ci@${{ inputs.pa11y-ci-version }}"
+      run: npm install --no-save --no-audit --no-fund --prefix "$ACTION_PATH" "pa11y-ci@$PA11Y_CI_VERSION"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PA11Y_CI_VERSION: ${{ inputs.pa11y-ci-version }}
+        PUPPETEER_CACHE_DIR: ${{ runner.temp }}/pa11y-ci-action/puppeteer
     - name: Run pa11y-ci-action
       id: run
       shell: bash
-      run: node "${{ github.action_path }}/dist/index.mjs"
+      run: node "$ACTION_PATH/dist/index.mjs"
       env:
+        ACTION_PATH: ${{ github.action_path }}
+        PUPPETEER_CACHE_DIR: ${{ runner.temp }}/pa11y-ci-action/puppeteer
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_URLS: ${{ inputs.urls }}
         INPUT_SITEMAP: ${{ inputs.sitemap }}
