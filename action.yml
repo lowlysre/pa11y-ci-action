@@ -31,6 +31,10 @@ inputs:
     description: 'Directory to resolve the config file and run pa11y-ci from.'
     required: false
     default: '.'
+  pa11y-ci-version:
+    description: 'Version of `pa11y-ci` to install and run, as an npm version range (e.g. `4.1.1`, `^4.0.0`).'
+    required: false
+    default: '4.1.1'
   comment-on-pr:
     description: 'Post or update a sticky summary comment on the triggering pull request.'
     required: false
@@ -53,5 +57,11 @@ outputs:
     description: 'Path to the raw pa11y-ci JSON report written to the runner temp directory.'
 
 runs:
-  using: 'node24'
-  main: 'dist/index.mjs'
+  using: 'composite'
+  steps:
+    - name: Install pa11y-ci
+      shell: bash
+      run: npm install --no-save --no-audit --no-fund --prefix "${{ github.action_path }}" "pa11y-ci@${{ inputs.pa11y-ci-version }}"
+    - name: Run pa11y-ci-action
+      shell: bash
+      run: node "${{ github.action_path }}/dist/index.mjs"

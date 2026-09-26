@@ -45,6 +45,17 @@ If a `.pa11yci`, `.pa11yci.json`, `.pa11yci.js`, or `.pa11yci.cjs` file exists i
           threshold: 5
 ```
 
+### Pin or upgrade the pa11y-ci version
+
+The action installs `pa11y-ci` itself at run time rather than shipping it bundled, so `pa11y-ci-version` accepts any npm version range: pin it for reproducibility, or bump it ahead of this action's own default to pick up an upstream fix or a new pa11y-ci release:
+
+```yaml
+      - uses: lowlysre/pa11y-ci-action@v1
+        with:
+          urls: https://example.com
+          pa11y-ci-version: '4.1.1'
+```
+
 ### Post a sticky PR comment
 
 Set `comment-on-pr: true` on a `pull_request`-triggered run to post or update a single comment on the PR with the same summary table as the job summary. This needs `pull-requests: write`:
@@ -81,6 +92,7 @@ jobs:
 | `threshold` | Number of issues permitted before the action fails. | `0` |
 | `concurrency` | Pages to test in parallel. Only used when no config file is found. | `1` |
 | `working-directory` | Directory to resolve the config file and run pa11y-ci from. | `.` |
+| `pa11y-ci-version` | Version of `pa11y-ci` to install and run, as an npm version range. | `4.1.1` |
 | `comment-on-pr` | Post or update a sticky summary comment on the triggering pull request. | `false` |
 | `github-token` | Token used for `comment-on-pr`. Needs `pull-requests: write`. | `github.token` |
 
@@ -110,7 +122,9 @@ The action runs pa11y-ci as a separate child process rather than importing it as
 
 The action is bundled with [esbuild](https://esbuild.github.io/) into a single ESM `dist/index.mjs`, not [`@vercel/ncc`](https://github.com/vercel/ncc): `ncc` hasn't kept up with the `@actions/*` toolkit's move to ESM-only exports, and can't resolve them.
 
+`pa11y-ci` itself is deliberately *not* part of that bundle. It also brings a native Chromium download via `puppeteer`, which no amount of JS bundling can solve. So `action.yml` is a composite action: an install step runs `npm install --prefix` to fetch the `pa11y-ci-version` you asked for into the action's own directory, then a second step runs the bundled entrypoint against it. This is also what makes `pa11y-ci-version` possible — the version is a runtime install argument, not something baked into a build.
+
 ### Known gaps
 
-- pa11y-ci's dependency chain (puppeteer via `pa11y`) currently pulls in a vulnerable `extract-zip` ([GHSA-jmr9-qjv8-65gv](https://github.com/advisories/GHSA-jmr9-qjv8-65gv), [GHSA-7pqw-9j4j-h8q3](https://github.com/advisories/GHSA-7pqw-9j4j-h8q3)), used only to unpack the downloaded Chromium build. There's no non-breaking fix upstream at time of writing; `npm audit fix --force` downgrades `pa11y-ci` to `3.1.0`, which is a breaking change.
-- Each run downloads a Chromium build via `npm ci` since `node_modules` isn't committed or cached. Caching that install (keyed on `package-lock.json`) is a reasonable follow-up if run time becomes a problem.
+- pa11y-ci's dependency chain (puppeteer via `pa11y`) currently pulls in a vulnerable `extract-zip` ([GHSA-jmr9-qjv8-65gv](https://github.com/advisories/GHSA-jmr9-qjv8-65gv), [GHSA-7pqw-9j4j-h8q3](https://github.com/advisories/GHSA-7pqw-9j4j-h8q3)), used only to unpack the downloaded Chromium build. There's no non-breaking fix upstream at time of writing; `npm audit fix --force` downgrades `pa11y-ci` to `3.1.0`, which is a breaking change. This applies to whatever `pa11y-ci-version` you install, not just this action's default.
+- Each run installs `pa11y-ci` fresh and downloads a Chromium build, since neither is cached between runs. Caching that install (keyed on `pa11y-ci-version`) is a reasonable follow-up if run time becomes a problem.
