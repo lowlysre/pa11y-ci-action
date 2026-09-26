@@ -164,11 +164,13 @@ You can, and plenty of repos do. This wraps that in one `uses:` line with a pinn
 
 - pa11y-ci runs as a subprocess, not an imported library, to keep a clean boundary with its [LGPL-3.0 license](https://github.com/pa11y/pa11y-ci/blob/main/LICENSE).
 - It's a composite action: one step installs `pa11y-ci@<pa11y-ci-version>`, the next runs the bundled `dist/index.mjs`. pa11y-ci and its Chromium download aren't bundled.
+- Before installing, [sustainable-npm](https://github.com/lowlydba/sustainable-npm) sets npm config to skip audit, funding, and progress output, prefer the local cache, and log errors only. Install scripts stay on, because puppeteer's postinstall script downloads Chromium.
 
 ### Known gaps
 
 - The Chromium cache is keyed on the literal `pa11y-ci-version` string. With a range like `^4.0.0`, a newer pa11y-ci that needs a newer Chromium downloads it every run until the range string changes. Pin an exact version to avoid that.
 - The config the action builds from inputs runs Chromium with `--no-sandbox`, because `ubuntu-latest`'s [AppArmor policy](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md) blocks its sandbox. Only point the action at sites you trust.
+- sustainable-npm writes its settings to the user-level npm config, so they also apply to npm commands in later steps of the same job, including `loglevel=error` and `ignore-scripts=false`. Override them with flags or `npm config set` in those steps if you need different values.
 
 ## Acknowledgements
 
