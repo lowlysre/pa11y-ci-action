@@ -5,7 +5,7 @@ import * as core from '@actions/core';
 import * as github from '@actions/github';
 import {findConfigPath, buildSyntheticConfig, parseUrlsInput} from './lib/config.js';
 import {runPa11yCi} from './lib/runPa11yCi.js';
-import {summarize, buildMarkdown} from './lib/report.js';
+import {summarize, buildMarkdown, failureMessage} from './lib/report.js';
 import {upsertComment, permissionWarning} from './lib/comment.js';
 
 async function run() {
@@ -26,7 +26,7 @@ async function run() {
 		`using pa11y-ci config at ${configPath}` :
 		'no pa11y-ci config found, using urls/sitemap/standard/concurrency inputs');
 
-	const report = await runPa11yCi({cwd: workingDirectory, configPath, config: syntheticConfig, sitemap, threshold});
+	const report = await runPa11yCi({cwd: workingDirectory, configPath, config: syntheticConfig, sitemap});
 	const summary = summarize(report, threshold);
 	const markdown = buildMarkdown(summary);
 
@@ -65,7 +65,7 @@ async function run() {
 	}
 
 	if (!summary.passed) {
-		core.setFailed(`pa11y-ci found ${summary.totalIssues} issue(s) across ${summary.totalUrls - summary.passedUrls} URL(s), exceeding the threshold of ${threshold}`);
+		core.setFailed(failureMessage(summary, threshold));
 	}
 }
 

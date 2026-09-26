@@ -1,9 +1,10 @@
 export const MARKER = '<!-- pa11y-ci-action-summary -->';
 
 /**
- * Reduce a raw pa11y-ci report ({total, passes, errors, results}) into
- * the counts the action exposes as outputs, plus a per-URL breakdown by
- * issue type for the summary table.
+ * Reduce a raw pa11y-ci report into the counts the action exposes as
+ * outputs, plus a per-URL breakdown by issue type for the summary table.
+ * Counts come from `results`, not pa11y-ci's `passes`/`errors`, which
+ * don't count load failures as failures.
  */
 export function summarize(report, threshold) {
 	const urls = Object.entries(report.results).map(([url, issues]) => {
@@ -15,16 +16,35 @@ export function summarize(report, threshold) {
 		for (const issue of issues) {
 			counts[issue.type] = (counts[issue.type] || 0) + 1;
 		}
-		return {url, crashed: false, counts};
+		return {url, crashed: false, issues: issues.length, counts};
 	});
+
+	const loaded = urls.filter(url => !url.crashed);
+	const totalIssues = loaded.reduce((sum, url) => sum + url.issues, 0);
+	const crashedUrls = urls.length - loaded.length;
 
 	return {
 		totalUrls: report.total,
-		passedUrls: report.passes,
-		totalIssues: report.errors,
-		passed: report.errors <= threshold && report.passes === report.total,
+		passedUrls: loaded.filter(url => url.issues === 0).length,
+		crashedUrls,
+		totalIssues,
+		passed: totalIssues <= threshold && crashedUrls === 0,
 		urls
 	};
+}
+
+/**
+ * Explain why a run failed, or return `null` if it passed.
+ */
+export function failureMessage(summary, threshold) {
+	const reasons = [];
+	if (summary.crashedUrls > 0) {
+		reasons.push(`${summary.crashedUrls} URL(s) failed to load`);
+	}
+	if (summary.totalIssues > threshold) {
+		reasons.push(`found ${summary.totalIssues} issue(s), exceeding the threshold of ${threshold}`);
+	}
+	return reasons.length > 0 ? `pa11y-ci ${reasons.join(' and ')}` : null;
 }
 
 /**

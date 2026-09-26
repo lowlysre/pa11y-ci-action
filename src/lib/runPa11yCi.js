@@ -18,12 +18,13 @@ export function resolveBinPath() {
 /**
  * Run pa11y-ci and return its parsed JSON report.
  *
- * pa11y-ci exits non-zero when the threshold is exceeded, so the exec
- * call never throws on a failing accessibility run, only on pa11y-ci
- * itself crashing (bad config, no browser, etc).
+ * pa11y-ci exits 2 when any URL has issues, so the exec call never throws
+ * on a failing accessibility run, only on pa11y-ci itself crashing (bad
+ * config, no browser, etc). The action applies its own threshold to the
+ * report, so `--threshold` isn't passed.
  */
-export async function runPa11yCi({cwd, configPath, config, sitemap, threshold}) {
-	const args = ['--json', '--threshold', String(threshold)];
+export async function runPa11yCi({cwd, configPath, config, sitemap}) {
+	const args = ['--json'];
 	if (configPath) {
 		args.push('--config', configPath);
 	} else {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {summarize, buildMarkdown} from '../../src/lib/report.js';
+import {summarize, buildMarkdown, failureMessage} from '../../src/lib/report.js';
 
 function issue(type) {
 	return {code: 'WCAG2AA.Test', type, message: `a ${type}`, context: '<div>', selector: 'div'};
@@ -60,6 +60,42 @@ test('summarize flags a page-load failure as crashed instead of an issue', () =>
 
 	assert.equal(url.crashed, true);
 	assert.equal(url.message, 'net::ERR_CONNECTION_REFUSED');
+	assert.equal(summary.crashedUrls, 1);
+	assert.equal(summary.totalIssues, 0);
+	assert.equal(summary.passed, false);
+});
+
+test('summarize counts issues from results, not pa11y-ci passes/errors', () => {
+	const report = {
+		total: 2,
+		passes: 2,
+		errors: 0,
+		results: {
+			'https://example.com/a': [issue('error'), issue('error')],
+			'https://example.com/b': [issue('notice')]
+		}
+	};
+
+	const summary = summarize(report, 5);
+
+	assert.equal(summary.passedUrls, 0);
+	assert.equal(summary.totalIssues, 3);
+	assert.equal(summary.passed, true);
+});
+
+test('failureMessage returns null for a passing run', () => {
+	assert.equal(failureMessage({crashedUrls: 0, totalIssues: 2}, 2), null);
+});
+
+test('failureMessage reports load failures without blaming the threshold', () => {
+	assert.equal(failureMessage({crashedUrls: 1, totalIssues: 0}, 0), 'pa11y-ci 1 URL(s) failed to load');
+});
+
+test('failureMessage reports both load failures and threshold breaches', () => {
+	assert.equal(
+		failureMessage({crashedUrls: 2, totalIssues: 4}, 1),
+		'pa11y-ci 2 URL(s) failed to load and found 4 issue(s), exceeding the threshold of 1'
+	);
 });
 
 test('buildMarkdown includes the sticky marker and a row per url', () => {

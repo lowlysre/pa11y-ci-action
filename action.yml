@@ -20,7 +20,7 @@ inputs:
     required: false
     default: 'WCAG2AA'
   threshold:
-    description: 'Number of errors permitted before the action fails.'
+    description: 'Number of issues permitted across all URLs before the action fails.'
     required: false
     default: '0'
   concurrency:
@@ -59,7 +59,7 @@ outputs:
     description: 'Total number of issues found across all URLs.'
     value: ${{ steps.run.outputs.total-issues }}
   passed:
-    description: '`true` if the run was within the configured threshold.'
+    description: '`true` if every URL loaded and `total-issues` is within `threshold`.'
     value: ${{ steps.run.outputs.passed }}
   report-json:
     description: 'Path to the raw pa11y-ci JSON report written to the runner temp directory.'

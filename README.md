@@ -77,7 +77,7 @@ On `ubuntu-latest`, your config needs Chromium's sandbox turned off, or Chromium
 
 ### Tune the failure threshold
 
-`threshold` is passed straight through to pa11y-ci's own `--threshold` flag: the number of issues permitted before the action fails. Set it above `0` to allow a known baseline of issues while still catching regressions:
+`threshold` is the number of issues permitted across all URLs combined before the action fails. Set it above `0` to allow a known baseline of issues while still catching regressions:
 
 ```yaml
       - uses: lowlysre/pa11y-ci-action@acce551b1e4a119f2d7c03e8b16a5d4c7e91f0a3 # v1.0.0
@@ -85,6 +85,11 @@ On `ubuntu-latest`, your config needs Chromium's sandbox turned off, or Chromium
           sitemap: https://example.com/sitemap.xml
           threshold: 5
 ```
+
+A URL that fails to load fails the action regardless of `threshold`.
+
+> [!WARNING]
+> Don't set `threshold` in a `.pa11yci` config. pa11y-ci applies it per URL and drops the issues of any URL within it from the report, so they don't show up in the summary or outputs. Use this action's `threshold` input instead.
 
 ### Pin or upgrade the pa11y-ci version
 
@@ -131,7 +136,7 @@ jobs:
 | `urls` | Newline-separated URLs to test. Only used when no config file is found. | |
 | `sitemap` | Sitemap URL to crawl. Only used when no config file is found. | |
 | `standard` | `WCAG2A`, `WCAG2AA`, or `WCAG2AAA`. Only used when no config file is found. | `WCAG2AA` |
-| `threshold` | Number of issues permitted before the action fails. | `0` |
+| `threshold` | Number of issues permitted across all URLs before the action fails. | `0` |
 | `concurrency` | Pages to test in parallel. Only used when no config file is found. | `1` |
 | `working-directory` | Directory to resolve the config file and run pa11y-ci from. | `.` |
 | `pa11y-ci-version` | Version of `pa11y-ci` to install and run, as an npm version range. | `4.1.1` |
@@ -146,7 +151,7 @@ jobs:
 | `total-urls` | Number of URLs tested. |
 | `passed-urls` | Number of URLs with no issues. |
 | `total-issues` | Total issues found across all URLs. |
-| `passed` | `true` if the run was within the configured threshold. |
+| `passed` | `true` if every URL loaded and `total-issues` is within `threshold`. |
 | `report-json` | Path to the raw pa11y-ci JSON report on the runner's temp directory. |
 | `cache-hit` | `true` if the Chromium cache was restored. Empty when `cache` is `false`. |
 

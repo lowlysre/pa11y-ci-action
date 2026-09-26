@@ -25265,8 +25265,8 @@ import path5 from "node:path";
 function resolveBinPath() {
   return __require.resolve("pa11y-ci/bin/pa11y-ci.js");
 }
-async function runPa11yCi({ cwd, configPath, config, sitemap, threshold }) {
-  const args = ["--json", "--threshold", String(threshold)];
+async function runPa11yCi({ cwd, configPath, config, sitemap }) {
+  const args = ["--json"];
   if (configPath) {
     args.push("--config", configPath);
   } else {
@@ -25317,15 +25317,29 @@ function summarize(report, threshold) {
     for (const issue2 of issues) {
       counts[issue2.type] = (counts[issue2.type] || 0) + 1;
     }
-    return { url, crashed: false, counts };
+    return { url, crashed: false, issues: issues.length, counts };
   });
+  const loaded = urls.filter((url) => !url.crashed);
+  const totalIssues = loaded.reduce((sum, url) => sum + url.issues, 0);
+  const crashedUrls = urls.length - loaded.length;
   return {
     totalUrls: report.total,
-    passedUrls: report.passes,
-    totalIssues: report.errors,
-    passed: report.errors <= threshold && report.passes === report.total,
+    passedUrls: loaded.filter((url) => url.issues === 0).length,
+    crashedUrls,
+    totalIssues,
+    passed: totalIssues <= threshold && crashedUrls === 0,
     urls
   };
+}
+function failureMessage(summary2, threshold) {
+  const reasons = [];
+  if (summary2.crashedUrls > 0) {
+    reasons.push(`${summary2.crashedUrls} URL(s) failed to load`);
+  }
+  if (summary2.totalIssues > threshold) {
+    reasons.push(`found ${summary2.totalIssues} issue(s), exceeding the threshold of ${threshold}`);
+  }
+  return reasons.length > 0 ? `pa11y-ci ${reasons.join(" and ")}` : null;
 }
 function buildMarkdown(summary2) {
   const lines = [
@@ -25392,7 +25406,7 @@ async function run() {
     concurrency: parseInt(getInput("concurrency") || "1", 10)
   });
   info(configPath ? `using pa11y-ci config at ${configPath}` : "no pa11y-ci config found, using urls/sitemap/standard/concurrency inputs");
-  const report = await runPa11yCi({ cwd: workingDirectory, configPath, config: syntheticConfig, sitemap, threshold });
+  const report = await runPa11yCi({ cwd: workingDirectory, configPath, config: syntheticConfig, sitemap });
   const summary2 = summarize(report, threshold);
   const markdown = buildMarkdown(summary2);
   const reportPath = path6.join(fs5.mkdtempSync(path6.join(os7.tmpdir(), "pa11y-ci-action-report-")), "report.json");
@@ -25426,7 +25440,7 @@ async function run() {
     }
   }
   if (!summary2.passed) {
-    setFailed(`pa11y-ci found ${summary2.totalIssues} issue(s) across ${summary2.totalUrls - summary2.passedUrls} URL(s), exceeding the threshold of ${threshold}`);
+    setFailed(failureMessage(summary2, threshold));
   }
 }
 run().catch((error2) => {
