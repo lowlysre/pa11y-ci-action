@@ -126,6 +126,10 @@ jobs:
 
 `comment-on-pr` is a no-op (with a warning) on any event other than `pull_request`, so it's safe to leave set on a workflow that also runs on `push`.
 
+The action only updates a comment written by the same account as `github-token`. A marker comment from anyone else is ignored and the action posts its own.
+
+GitHub caps comments at 65,536 characters and job summaries at 1 MiB. On a report too large for either, the table lists load failures and URLs with issues first, drops the rest, and says how many it left out. The `report-json` output always has every URL.
+
 ## Reference
 
 ### Inputs
@@ -136,8 +140,8 @@ jobs:
 | `urls` | Newline-separated URLs to test. Only used when no config file is found. | |
 | `sitemap` | Sitemap URL to crawl. Only used when no config file is found. | |
 | `standard` | `WCAG2A`, `WCAG2AA`, or `WCAG2AAA`. Only used when no config file is found. | `WCAG2AA` |
-| `threshold` | Number of issues permitted across all URLs before the action fails. | `0` |
-| `concurrency` | Pages to test in parallel. Only used when no config file is found. | `1` |
+| `threshold` | Number of issues permitted across all URLs before the action fails. Must be a whole number, `0` or more. | `0` |
+| `concurrency` | Pages to test in parallel. Only used when no config file is found. Must be a whole number, `1` or more. | `1` |
 | `working-directory` | Directory to resolve the config file and run pa11y-ci from. | `.` |
 | `pa11y-ci-version` | Version of `pa11y-ci` to install and run, as an npm version range. | `4.1.1` |
 | `cache` | Cache the Chromium build between runs. Set to `false` to download it fresh every run. | `true` |
@@ -157,7 +161,7 @@ jobs:
 
 ### Permissions
 
-The action itself needs no permissions beyond `contents: read` to check out the config file. `comment-on-pr: true` additionally needs `pull-requests: write` on the job. Without it, the action logs a warning and skips the comment instead of failing. Pull requests from forks get a read-only token, so they get the same warning.
+The action itself needs no permissions beyond `contents: read` to check out the config file. `comment-on-pr: true` additionally needs `pull-requests: write` on the job. Without it, the action logs a warning and skips the comment instead of failing. Pull requests from forks get a read-only token, so they get the same warning. A 403 from a rate limit still fails the action, since skipping it would hide the report.
 
 ## Explanation
 

@@ -47,11 +47,57 @@ export function failureMessage(summary, threshold) {
 	return reasons.length > 0 ? `pa11y-ci ${reasons.join(' and ')}` : null;
 }
 
+// GitHub rejects comment bodies over 65,536 characters. Measuring UTF-8
+// bytes instead is stricter, so a body that fits in bytes always fits.
+export const COMMENT_MAX_BYTES = 65_536;
+// GitHub caps each step's job summary at 1 MiB.
+export const SUMMARY_MAX_BYTES = 1024 * 1024;
+
 /**
- * Build the markdown table shared by the job summary and the PR comment.
+ * Make untrusted text (URLs, page-load errors) safe to drop into a
+ * markdown table cell: keep it on one line, stop it from adding columns,
+ * links, HTML, or formatting, and stop `@name` from pinging anyone.
  */
-export function buildMarkdown(summary) {
-	const lines = [
+export function escapeMarkdownCell(text) {
+	return String(text)
+		.replace(/\r\n|\r|\n/g, ' ')
+		.replace(/&/g, '&amp;')
+		.replace(/[\\`*_[\]<>|~]/g, '\\$&')
+		.replace(/@/g, '@\u200B');
+}
+
+function truncate(text, maxLength) {
+	const value = String(text);
+	return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
+}
+
+function row(url) {
+	const name = escapeMarkdownCell(url.url);
+	if (url.crashed) {
+		return `| ${name} | :warning: failed to load: ${escapeMarkdownCell(truncate(url.message, 500))} | | |`;
+	}
+	return `| ${name} | ${url.counts.error} | ${url.counts.warning} | ${url.counts.notice} |`;
+}
+
+// Load failures first, then URLs with issues, then clean ones, so a
+// truncated table still shows what needs fixing.
+function rank(url) {
+	if (url.crashed) {
+		return 0;
+	}
+	return url.issues > 0 ? 1 : 2;
+}
+
+function omittedNote(count) {
+	return `\n\n_${count} more URL(s) not shown to stay within GitHub's size limit. See the \`report-json\` output for the full results._`;
+}
+
+/**
+ * Build the markdown table shared by the job summary and the PR comment,
+ * dropping rows once the result would exceed `maxBytes`.
+ */
+export function buildMarkdown(summary, {maxBytes = Number.POSITIVE_INFINITY} = {}) {
+	const header = [
 		MARKER,
 		`### pa11y-ci results`,
 		'',
@@ -59,15 +105,32 @@ export function buildMarkdown(summary) {
 		'',
 		'| URL | Errors | Warnings | Notices |',
 		'| --- | --- | --- | --- |'
-	];
+	].join('\n');
 
-	for (const url of summary.urls) {
-		if (url.crashed) {
-			lines.push(`| ${url.url} | :warning: failed to load: ${url.message} | | |`);
-			continue;
-		}
-		lines.push(`| ${url.url} | ${url.counts.error} | ${url.counts.warning} | ${url.counts.notice} |`);
+	const rows = summary.urls
+		.map((url, index) => ({url, index}))
+		.sort((a, b) => rank(a.url) - rank(b.url) || a.index - b.index)
+		.map(({url}) => row(url));
+
+	const full = [header, ...rows].join('\n');
+	if (Buffer.byteLength(full) <= maxBytes) {
+		return full;
 	}
 
-	return lines.join('\n');
+	// Reserve room for the note at its longest, so adding it never overflows.
+	const budget = maxBytes - Buffer.byteLength(omittedNote(rows.length));
+	let body = header;
+	let bytes = Buffer.byteLength(body);
+	let shown = 0;
+	for (const line of rows) {
+		const lineBytes = Buffer.byteLength(line) + 1;
+		if (bytes + lineBytes > budget) {
+			break;
+		}
+		body += `\n${line}`;
+		bytes += lineBytes;
+		shown++;
+	}
+
+	return body + omittedNote(rows.length - shown);
 }

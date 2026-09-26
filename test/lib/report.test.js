@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {summarize, buildMarkdown, failureMessage} from '../../src/lib/report.js';
+import {summarize, buildMarkdown, failureMessage, escapeMarkdownCell, COMMENT_MAX_BYTES} from '../../src/lib/report.js';
 
 function issue(type) {
 	return {code: 'WCAG2AA.Test', type, message: `a ${type}`, context: '<div>', selector: 'div'};
@@ -111,4 +111,91 @@ test('buildMarkdown includes the sticky marker and a row per url', () => {
 	assert.match(markdown, /pa11y-ci-action-summary/);
 	assert.match(markdown, /https:\/\/example\.com/);
 	assert.match(markdown, /1\/1.*URLs passed/);
+});
+
+test('escapeMarkdownCell keeps untrusted text on one line and inert', () => {
+	const escaped = escapeMarkdownCell('a|b\r\nc\nd `x` <img> [l](u) *b* _i_ ~s~ \\ & @octocat');
+
+	assert.equal(escaped.includes('\n'), false);
+	assert.equal(escaped.includes('\r'), false);
+	assert.match(escaped, /a\\\|b c d/);
+	assert.match(escaped, /\\`x\\`/);
+	assert.match(escaped, /\\<img\\>/);
+	assert.match(escaped, /\\\[l\\\]\(u\)/);
+	assert.match(escaped, /\\\*b\\\* \\_i\\_ \\~s\\~ \\\\ &amp;/);
+	assert.match(escaped, /@\u200Boctocat/);
+});
+
+test('buildMarkdown escapes urls and load errors in table rows', () => {
+	const summary = summarize({
+		total: 2,
+		results: {
+			'https://example.com/a|b': [],
+			'https://example.com/down': [{message: 'boom\n| injected | row |\n@octocat'}]
+		}
+	}, 0);
+
+	const rows = buildMarkdown(summary).split('\n').filter(line => line.startsWith('| https'));
+
+	assert.equal(rows.length, 2);
+	assert.match(rows.join('\n'), /a\\\|b/);
+	assert.match(rows.join('\n'), /boom \\\| injected \\\| row \\\| @\u200Boctocat/);
+});
+
+test('buildMarkdown lists load failures and issues before clean urls', () => {
+	const summary = summarize({
+		total: 3,
+		results: {
+			'https://example.com/clean': [],
+			'https://example.com/issues': [issue('error')],
+			'https://example.com/down': [{message: 'net::ERR'}]
+		}
+	}, 0);
+
+	const urls = buildMarkdown(summary).split('\n').filter(line => line.startsWith('| https')).map(line => line.split(' ')[1]);
+
+	assert.deepEqual(urls, ['https://example.com/down', 'https://example.com/issues', 'https://example.com/clean']);
+});
+
+function bigSummary(count, suffix = '') {
+	const results = {};
+	for (let index = 0; index < count; index++) {
+		results[`https://example.com/page-${index}${suffix}`] = [issue('error')];
+	}
+	return summarize({total: count, results}, 0);
+}
+
+test('buildMarkdown leaves small reports untouched by the size limit', () => {
+	const summary = bigSummary(3);
+
+	assert.equal(buildMarkdown(summary, {maxBytes: COMMENT_MAX_BYTES}), buildMarkdown(summary));
+});
+
+test('buildMarkdown drops rows and notes the omission when over the limit', () => {
+	const summary = bigSummary(2000);
+	const markdown = buildMarkdown(summary, {maxBytes: COMMENT_MAX_BYTES});
+
+	assert.ok(Buffer.byteLength(markdown) <= COMMENT_MAX_BYTES);
+	const shown = markdown.split('\n').filter(line => line.startsWith('| https')).length;
+	assert.ok(shown > 0 && shown < 2000);
+	assert.match(markdown, new RegExp(`_${2000 - shown} more URL\\(s\\) not shown`));
+	assert.match(markdown, /report-json/);
+});
+
+test('buildMarkdown measures the limit in bytes for multibyte text', () => {
+	const summary = bigSummary(2000, '/日本語ページ');
+	const markdown = buildMarkdown(summary, {maxBytes: COMMENT_MAX_BYTES});
+
+	assert.ok(Buffer.byteLength(markdown) <= COMMENT_MAX_BYTES);
+	assert.match(markdown, /more URL\(s\) not shown/);
+});
+
+test('buildMarkdown fits exactly at the boundary without an omission note', () => {
+	const summary = bigSummary(5);
+	const full = buildMarkdown(summary);
+	const size = Buffer.byteLength(full);
+
+	assert.equal(buildMarkdown(summary, {maxBytes: size}), full);
+	assert.match(buildMarkdown(summary, {maxBytes: size - 1}), /more URL\(s\) not shown/);
+	assert.ok(Buffer.byteLength(buildMarkdown(summary, {maxBytes: size - 1})) <= size - 1);
 });

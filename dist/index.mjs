@@ -8158,10 +8158,10 @@ var require_fixed_queue = __commonJS({
         this.head.push(data);
       }
       shift() {
-        const tail = this.tail;
-        const next = tail.shift();
-        if (tail.isEmpty() && tail.next !== null) {
-          this.tail = tail.next;
+        const tail2 = this.tail;
+        const next = tail2.shift();
+        if (tail2.isEmpty() && tail2.next !== null) {
+          this.tail = tail2.next;
         }
         return next;
       }
@@ -17339,7 +17339,7 @@ var require_permessage_deflate = __commonJS({
     var { createInflateRaw, Z_DEFAULT_WINDOWBITS } = __require("node:zlib");
     var { isValidClientWindowBits } = require_util7();
     var { MessageSizeExceededError } = require_errors();
-    var tail = Buffer.from([0, 0, 255, 255]);
+    var tail2 = Buffer.from([0, 0, 255, 255]);
     var kBuffer = /* @__PURE__ */ Symbol("kBuffer");
     var kLength = /* @__PURE__ */ Symbol("kLength");
     var PerMessageDeflate = class {
@@ -17397,7 +17397,7 @@ var require_permessage_deflate = __commonJS({
         }
         this.#inflate.write(chunk);
         if (fin) {
-          this.#inflate.write(tail);
+          this.#inflate.write(tail2);
         }
         this.#inflate.flush(() => {
           if (!this.#inflate) {
@@ -20180,8 +20180,8 @@ var Summary = class {
    * @returns {Summary} summary instance
    */
   addTable(rows) {
-    const tableBody = rows.map((row) => {
-      const cells = row.map((cell) => {
+    const tableBody = rows.map((row2) => {
+      const cells = row2.map((cell) => {
         if (typeof cell === "string") {
           return this.wrap("td", cell);
         }
@@ -25254,6 +25254,14 @@ function buildSyntheticConfig({ urls, sitemap, standard, concurrency }) {
     urls
   };
 }
+function parseIntegerInput(name, value, { min }) {
+  const trimmed = String(value).trim();
+  const parsed = /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < min) {
+    throw new Error(`\`${name}\` must be a whole number of at least ${min}, got "${value}"`);
+  }
+  return parsed;
+}
 function parseUrlsInput(urlsInput) {
   return urlsInput.split("\n").map((url) => url.trim()).filter(Boolean);
 }
@@ -25265,7 +25273,11 @@ import path5 from "node:path";
 function resolveBinPath() {
   return __require.resolve("pa11y-ci/bin/pa11y-ci.js");
 }
-async function runPa11yCi({ cwd, configPath, config, sitemap }) {
+var MAX_ERROR_OUTPUT = 4e3;
+function tail(text) {
+  return text.length > MAX_ERROR_OUTPUT ? `\u2026${text.slice(-MAX_ERROR_OUTPUT)}` : text;
+}
+async function runPa11yCi({ cwd, configPath, config, sitemap }, { execFn = exec, binPath } = {}) {
   const args = ["--json"];
   if (configPath) {
     args.push("--config", configPath);
@@ -25277,9 +25289,10 @@ async function runPa11yCi({ cwd, configPath, config, sitemap }) {
   }
   let stdout = "";
   let stderr = "";
-  const exitCode = await exec(`"${process.execPath}"`, [resolveBinPath(), ...args], {
+  const exitCode = await execFn(`"${process.execPath}"`, [binPath ?? resolveBinPath(), ...args], {
     cwd,
     ignoreReturnCode: true,
+    silent: true,
     listeners: {
       stdout: (data) => {
         stdout += data.toString();
@@ -25291,13 +25304,13 @@ async function runPa11yCi({ cwd, configPath, config, sitemap }) {
   });
   if (exitCode !== 0 && exitCode !== 2) {
     throw new Error(`pa11y-ci exited with code ${exitCode}:
-${stderr}`);
+${tail(stderr || stdout)}`);
   }
   try {
     return JSON.parse(stdout);
   } catch (error2) {
     throw new Error(`could not parse pa11y-ci JSON output: ${error2.message}
-${stdout}`);
+${tail(stderr || stdout)}`);
   }
 }
 function writeSyntheticConfig(cwd, config) {
@@ -25341,8 +25354,35 @@ function failureMessage(summary2, threshold) {
   }
   return reasons.length > 0 ? `pa11y-ci ${reasons.join(" and ")}` : null;
 }
-function buildMarkdown(summary2) {
-  const lines = [
+var COMMENT_MAX_BYTES = 65536;
+var SUMMARY_MAX_BYTES = 1024 * 1024;
+function escapeMarkdownCell(text) {
+  return String(text).replace(/\r\n|\r|\n/g, " ").replace(/&/g, "&amp;").replace(/[\\`*_[\]<>|~]/g, "\\$&").replace(/@/g, "@\u200B");
+}
+function truncate(text, maxLength) {
+  const value = String(text);
+  return value.length > maxLength ? `${value.slice(0, maxLength)}\u2026` : value;
+}
+function row(url) {
+  const name = escapeMarkdownCell(url.url);
+  if (url.crashed) {
+    return `| ${name} | :warning: failed to load: ${escapeMarkdownCell(truncate(url.message, 500))} | | |`;
+  }
+  return `| ${name} | ${url.counts.error} | ${url.counts.warning} | ${url.counts.notice} |`;
+}
+function rank(url) {
+  if (url.crashed) {
+    return 0;
+  }
+  return url.issues > 0 ? 1 : 2;
+}
+function omittedNote(count) {
+  return `
+
+_${count} more URL(s) not shown to stay within GitHub's size limit. See the \`report-json\` output for the full results._`;
+}
+function buildMarkdown(summary2, { maxBytes = Number.POSITIVE_INFINITY } = {}) {
+  const header = [
     MARKER,
     `### pa11y-ci results`,
     "",
@@ -25350,31 +25390,66 @@ function buildMarkdown(summary2) {
     "",
     "| URL | Errors | Warnings | Notices |",
     "| --- | --- | --- | --- |"
-  ];
-  for (const url of summary2.urls) {
-    if (url.crashed) {
-      lines.push(`| ${url.url} | :warning: failed to load: ${url.message} | | |`);
-      continue;
-    }
-    lines.push(`| ${url.url} | ${url.counts.error} | ${url.counts.warning} | ${url.counts.notice} |`);
+  ].join("\n");
+  const rows = summary2.urls.map((url, index) => ({ url, index })).sort((a, b) => rank(a.url) - rank(b.url) || a.index - b.index).map(({ url }) => row(url));
+  const full = [header, ...rows].join("\n");
+  if (Buffer.byteLength(full) <= maxBytes) {
+    return full;
   }
-  return lines.join("\n");
+  const budget = maxBytes - Buffer.byteLength(omittedNote(rows.length));
+  let body = header;
+  let bytes = Buffer.byteLength(body);
+  let shown = 0;
+  for (const line of rows) {
+    const lineBytes = Buffer.byteLength(line) + 1;
+    if (bytes + lineBytes > budget) {
+      break;
+    }
+    body += `
+${line}`;
+    bytes += lineBytes;
+    shown++;
+  }
+  return body + omittedNote(rows.length - shown);
 }
 
 // src/lib/comment.js
+function isRateLimited(error2) {
+  const remaining = error2?.response?.headers?.["x-ratelimit-remaining"];
+  return remaining === "0" || remaining === 0 || /rate limit/i.test(error2?.message ?? "");
+}
 function permissionWarning(error2) {
-  if (error2?.status !== 403) {
+  if (error2?.status !== 403 || isRateLimited(error2)) {
     return null;
   }
-  return "Skipped the PR comment: the token lacks `pull-requests: write`. Add it to the job's `permissions`. Pull requests from forks get a read-only token and can't be commented on.";
+  const detail = error2.message ? ` (GitHub said: ${error2.message})` : "";
+  return `Skipped the PR comment: GitHub returned 403${detail}. The token most likely lacks \`pull-requests: write\`. Add it to the job's \`permissions\`. Pull requests from forks get a read-only token and can't be commented on.`;
+}
+async function resolveTokenLogin(octokit) {
+  try {
+    const { data } = await octokit.rest.users.getAuthenticated();
+    if (data?.login) {
+      return data.login;
+    }
+  } catch {
+  }
+  try {
+    const { viewer } = await octokit.graphql("query { viewer { login } }");
+    if (viewer?.login) {
+      return viewer.login.endsWith("[bot]") ? viewer.login : `${viewer.login}[bot]`;
+    }
+  } catch {
+  }
+  return "github-actions[bot]";
 }
 async function upsertComment(octokit, { owner, repo, issueNumber, body }) {
+  const login = await resolveTokenLogin(octokit);
   const comments = await octokit.paginate(octokit.rest.issues.listComments, {
     owner,
     repo,
     issue_number: issueNumber
   });
-  const existing = comments.find((comment) => comment.body.includes(MARKER));
+  const existing = comments.find((comment) => comment.body?.includes(MARKER) && comment.user?.login === login);
   if (existing) {
     await octokit.rest.issues.updateComment({
       owner,
@@ -25395,7 +25470,8 @@ async function upsertComment(octokit, { owner, repo, issueNumber, body }) {
 // src/index.js
 async function run() {
   const workingDirectory = path6.resolve(getInput("working-directory") || ".");
-  const threshold = parseInt(getInput("threshold") || "0", 10);
+  const threshold = parseIntegerInput("threshold", getInput("threshold") || "0", { min: 0 });
+  const concurrency = parseIntegerInput("concurrency", getInput("concurrency") || "1", { min: 1 });
   const commentOnPr = getBooleanInput("comment-on-pr");
   const configPath = findConfigPath(getInput("config"), workingDirectory);
   const sitemap = configPath ? void 0 : getInput("sitemap") || void 0;
@@ -25403,12 +25479,11 @@ async function run() {
     urls: parseUrlsInput(getInput("urls")),
     sitemap,
     standard: getInput("standard") || "WCAG2AA",
-    concurrency: parseInt(getInput("concurrency") || "1", 10)
+    concurrency
   });
   info(configPath ? `using pa11y-ci config at ${configPath}` : "no pa11y-ci config found, using urls/sitemap/standard/concurrency inputs");
   const report = await runPa11yCi({ cwd: workingDirectory, configPath, config: syntheticConfig, sitemap });
   const summary2 = summarize(report, threshold);
-  const markdown = buildMarkdown(summary2);
   const reportPath = path6.join(fs5.mkdtempSync(path6.join(os7.tmpdir(), "pa11y-ci-action-report-")), "report.json");
   fs5.writeFileSync(reportPath, JSON.stringify(report, null, 2));
   setOutput("total-urls", summary2.totalUrls);
@@ -25416,7 +25491,7 @@ async function run() {
   setOutput("total-issues", summary2.totalIssues);
   setOutput("passed", summary2.passed);
   setOutput("report-json", reportPath);
-  await summary.addRaw(markdown).write();
+  await summary.addRaw(buildMarkdown(summary2, { maxBytes: SUMMARY_MAX_BYTES })).write();
   if (commentOnPr) {
     const pullRequest = context2.payload.pull_request;
     if (!pullRequest) {
@@ -25428,7 +25503,7 @@ async function run() {
           owner: context2.repo.owner,
           repo: context2.repo.repo,
           issueNumber: pullRequest.number,
-          body: markdown
+          body: buildMarkdown(summary2, { maxBytes: COMMENT_MAX_BYTES })
         });
       } catch (error2) {
         const warning2 = permissionWarning(error2);
