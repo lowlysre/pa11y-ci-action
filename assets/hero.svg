@@ -20,14 +20,12 @@
   <rect x="0.5" y="0.5" width="1199" height="419" rx="16" fill="none" stroke="#30363d"/>
 
   <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
-    <text x="72" y="150" font-size="18" fill="#a371f7">$ uses: lowlysre/pa11y-ci-action@v1</text>
+    <text x="72" y="150" font-size="14" fill="#a371f7">uses: lowlysre/pa11y-ci-action@acce551b1e4a119f2d7c03e8b16a5d4c7e91f0a3</text>
     <text x="72" y="214" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="58" font-weight="700" fill="#e6edf3" letter-spacing="-1.5">pa11y-ci-action</text>
     <text x="72" y="256" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" fill="#9198a1">Accessibility checks in CI, reported where you'll read them.</text>
     <g font-size="14">
       <rect x="72" y="290" width="92" height="30" rx="15" fill="none" stroke="#a371f7"/>
       <text x="118" y="310" text-anchor="middle" fill="#a371f7">WCAG2AA</text>
-      <rect x="176" y="290" width="124" height="30" rx="15" fill="none" stroke="#30363d"/>
-      <text x="238" y="310" text-anchor="middle" fill="#9198a1">threshold: 0</text>
     </g>
   </g>
 
