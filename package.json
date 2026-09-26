@@ -7,7 +7,7 @@
   "main": "src/index.js",
   "scripts": {
     "build": "esbuild src/index.js --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
-    "test": "node --test \"__tests__/**/*.test.js\""
+    "test": "node --test \"test/**/*.test.js\""
   },
   "license": "MIT",
   "repository": {
