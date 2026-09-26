@@ -65,3 +65,13 @@ runs:
     - name: Run pa11y-ci-action
       shell: bash
       run: node "${{ github.action_path }}/dist/index.mjs"
+      env:
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_URLS: ${{ inputs.urls }}
+        INPUT_SITEMAP: ${{ inputs.sitemap }}
+        INPUT_STANDARD: ${{ inputs.standard }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_CONCURRENCY: ${{ inputs.concurrency }}
+        INPUT_WORKING-DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_COMMENT-ON-PR: ${{ inputs.comment-on-pr }}
+        INPUT_GITHUB-TOKEN: ${{ inputs.github-token }}
