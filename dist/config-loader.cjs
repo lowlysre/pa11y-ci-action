@@ -40,7 +40,7 @@ var import_node_fs = __toESM(require("node:fs"), 1);
 var import_node_path = __toESM(require("node:path"), 1);
 var import_node_url = require("node:url");
 var DEFAULT_CONFIG_NAMES = [".pa11yci", ".pa11yci.json", ".pa11yci.js", ".pa11yci.cjs"];
-async function loadConfig({ configPath, config }) {
+async function loadConfig({ configPath, config }, warn = console.warn) {
   if (configPath) {
     config = /\.(cjs|mjs|js)$/.test(configPath) ? await (await import((0, import_node_url.pathToFileURL)(configPath).href)).default : JSON.parse(import_node_fs.default.readFileSync(configPath, "utf8"));
   }
@@ -66,12 +66,16 @@ async function loadConfig({ configPath, config }) {
     }
     seen.add(url);
   }
-  for (const options of [config, defaults, ...urls.filter((url) => typeof url === "object")]) {
-    if (options.threshold !== void 0 && options.threshold !== 0) {
-      throw new Error("config thresholds can hide issues; remove them and use the action threshold input");
-    }
+  const options = [config, defaults, ...urls.filter((url) => typeof url === "object")];
+  if (options.some((options2) => options2.threshold !== void 0 && options2.threshold !== 0)) {
+    warn("Config thresholds are overridden for this action run so all issues remain in the report. The original config is unchanged; use the action threshold input to allow issues.");
   }
-  return { ...config, defaults: { ...defaults, reporters: [] }, urls };
+  return {
+    ...config,
+    threshold: 0,
+    defaults: { ...defaults, threshold: 0, reporters: [] },
+    urls: urls.map((url) => typeof url === "object" ? { ...url, threshold: 0 } : url)
+  };
 }
 function findConfigPath(configInput, workingDirectory) {
   if (configInput) {

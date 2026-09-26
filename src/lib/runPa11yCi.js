@@ -4,6 +4,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import * as exec from '@actions/exec';
+import * as core from '@actions/core';
 
 /**
  * Resolve the installed `pa11y-ci` CLI binary. Invoked as a separate
@@ -27,10 +28,10 @@ function tail(text) {
  * pa11y-ci exits 2 when any URL has issues, so the exec call never throws
  * on a failing accessibility run, only on pa11y-ci itself crashing (bad
  * config, no browser, etc). The action applies its own threshold to the
- * report, so `--threshold` isn't passed. Output isn't echoed to the log,
- * since the job summary replaces it; errors include a bounded excerpt.
+ * report, so `--threshold` isn't passed. Stdout feeds the report;
+ * stderr is surfaced as a bounded warning.
  */
-export async function runPa11yCi({cwd, configPath, config, sitemap}, {getExecOutput = exec.getExecOutput, binPath = resolveBinPath()} = {}) {
+export async function runPa11yCi({cwd, configPath, config, sitemap}, {getExecOutput = exec.getExecOutput, binPath = resolveBinPath(), warning = core.warning} = {}) {
 	const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'pa11y-ci-action-'));
 	const loader = fileURLToPath(new URL('./config-loader.cjs', import.meta.url));
 	const preparedConfig = path.join(tempDirectory, 'config.cjs');
@@ -46,6 +47,9 @@ export async function runPa11yCi({cwd, configPath, config, sitemap}, {getExecOut
 
 		if (exitCode !== 0 && exitCode !== 2) {
 			throw new Error(`pa11y-ci exited with code ${exitCode}:\n${tail(stderr || stdout)}`);
+		}
+		if (stderr.trim()) {
+			warning(tail(stderr.trim()));
 		}
 
 		try {

@@ -20,7 +20,7 @@ inputs:
     required: false
     default: 'WCAG2AA'
   threshold:
-    description: 'Number of issues permitted across all URLs before the action fails.'
+    description: 'Number of issues permitted across all URLs before the action fails. Overrides config thresholds for this run without modifying the config file.'
     required: false
     default: '0'
   concurrency:

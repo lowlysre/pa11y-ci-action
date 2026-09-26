@@ -4,7 +4,7 @@ import {pathToFileURL} from 'node:url';
 
 const DEFAULT_CONFIG_NAMES = ['.pa11yci', '.pa11yci.json', '.pa11yci.js', '.pa11yci.cjs'];
 
-export async function loadConfig({configPath, config}) {
+export async function loadConfig({configPath, config}, warn = console.warn) {
 	if (configPath) {
 		config = /\.(cjs|mjs|js)$/.test(configPath) ?
 			await (await import(pathToFileURL(configPath).href)).default :
@@ -32,13 +32,17 @@ export async function loadConfig({configPath, config}) {
 		}
 		seen.add(url);
 	}
-	for (const options of [config, defaults, ...urls.filter(url => typeof url === 'object')]) {
-		if (options.threshold !== undefined && options.threshold !== 0) {
-			throw new Error('config thresholds can hide issues; remove them and use the action threshold input');
-		}
+	const options = [config, defaults, ...urls.filter(url => typeof url === 'object')];
+	if (options.some(options => options.threshold !== undefined && options.threshold !== 0)) {
+		warn('Config thresholds are overridden for this action run so all issues remain in the report. The original config is unchanged; use the action threshold input to allow issues.');
 	}
 	// The CLI owns stdout; caller reporters must not add a second report.
-	return {...config, defaults: {...defaults, reporters: []}, urls};
+	return {
+		...config,
+		threshold: 0,
+		defaults: {...defaults, threshold: 0, reporters: []},
+		urls: urls.map(url => typeof url === 'object' ? {...url, threshold: 0} : url)
+	};
 }
 
 /**

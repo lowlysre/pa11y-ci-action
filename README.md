@@ -98,8 +98,8 @@ On `ubuntu-latest`, your config needs Chromium's sandbox turned off, or Chromium
 
 A URL that fails to load fails the action regardless of `threshold`.
 
-> [!WARNING]
-> Nonzero `threshold` values in a config, its defaults, or its URL entries are rejected. pa11y-ci drops issues within those thresholds from its report. Use this action's `threshold` input to keep the issue counts visible.
+> [!NOTE]
+> Shared configs can keep their thresholds. For this action run only, config thresholds are set to zero in a temporary runtime copy so pa11y-ci reports every issue. The action warns when it overrides a threshold and uses its own `threshold` input for the combined result. Your config file stays unchanged for other tools and local runs.
 
 ### Pin or upgrade the pa11y-ci version
 
@@ -208,7 +208,7 @@ You can, and plenty of repos do. This wraps that in one `uses:` line with a pinn
 
 - pa11y-ci runs as a subprocess, not an imported library, to keep a clean boundary with its [LGPL-3.0 license](https://github.com/pa11y/pa11y-ci/blob/main/LICENSE).
 - It's a composite action: one step installs `pa11y-ci@<pa11y-ci-version>` in an isolated directory, the next runs the bundled `dist/index.mjs`. pa11y-ci and its Chromium download aren't bundled.
-- The subprocess loads the selected config through a temporary adapter. It rejects lossy settings and disables caller reporters before invoking the pa11y-ci CLI.
+- The subprocess loads the selected config through a temporary adapter. It overrides config thresholds, rejects duplicate URLs, and disables caller reporters without modifying the source config.
 - `npm run build` generates the runtime bundles and [third-party notices](dist/THIRD_PARTY_NOTICES.txt) for their dependencies.
 
 ### Known gaps

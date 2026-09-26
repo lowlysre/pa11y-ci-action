@@ -94,3 +94,14 @@ test('runPa11yCi removes its config when the subprocess fails', async () => {
 	await assert.rejects(runPa11yCi({cwd: tmpDir(), config: {}}, {getExecOutput, binPath}), /bad config/);
 	assert.equal(fs.existsSync(path.dirname(calls[0].args[3])), false);
 });
+
+test('runPa11yCi surfaces bounded config warnings without polluting the JSON report', async () => {
+	const {getExecOutput} = fakeExec({stdout: JSON.stringify(report), stderr: `${'x'.repeat(5000)}config threshold overridden\n`});
+	const warnings = [];
+	assert.deepEqual(await runPa11yCi({cwd: tmpDir(), config: {}}, {
+		getExecOutput, binPath, warning: message => warnings.push(message)
+	}), report);
+	assert.equal(warnings.length, 1);
+	assert.ok(warnings[0].length <= 4001);
+	assert.ok(warnings[0].endsWith('config threshold overridden'));
+});

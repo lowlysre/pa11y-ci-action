@@ -25314,7 +25314,7 @@ var MAX_ERROR_OUTPUT = 4e3;
 function tail(text) {
   return text.length > MAX_ERROR_OUTPUT ? `\u2026${text.slice(-MAX_ERROR_OUTPUT)}` : text;
 }
-async function runPa11yCi({ cwd, configPath, config, sitemap }, { getExecOutput: getExecOutput2 = getExecOutput, binPath = resolveBinPath() } = {}) {
+async function runPa11yCi({ cwd, configPath, config, sitemap }, { getExecOutput: getExecOutput2 = getExecOutput, binPath = resolveBinPath(), warning: warning2 = warning } = {}) {
   const tempDirectory = fs4.mkdtempSync(path5.join(os6.tmpdir(), "pa11y-ci-action-"));
   const loader = fileURLToPath(new URL("./config-loader.cjs", import.meta.url));
   const preparedConfig = path5.join(tempDirectory, "config.cjs");
@@ -25332,6 +25332,9 @@ async function runPa11yCi({ cwd, configPath, config, sitemap }, { getExecOutput:
     if (exitCode !== 0 && exitCode !== 2) {
       throw new Error(`pa11y-ci exited with code ${exitCode}:
 ${tail(stderr || stdout)}`);
+    }
+    if (stderr.trim()) {
+      warning2(tail(stderr.trim()));
     }
     try {
       return JSON.parse(stdout);

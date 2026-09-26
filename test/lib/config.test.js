@@ -83,21 +83,44 @@ test('parseIntegerInput rejects values below the minimum', () => {
 	assert.throws(() => parseIntegerInput('concurrency', '0', {min: 1}), /at least 1, got "0"/);
 });
 
-test('loadConfig rejects duplicate scenarios and thresholds that hide issues', async () => {
+test('loadConfig rejects duplicate scenarios', async () => {
 	await assert.rejects(loadConfig({config: {urls: ['https://example.com', {url: 'https://example.com'}]}}), /duplicate URL/);
+});
+
+test('loadConfig overrides thresholds in copies and warns once without mutating shared configs', async () => {
 	for (const config of [
 		{threshold: 1},
 		{defaults: {threshold: 1}},
-		{urls: [{url: 'https://example.com', threshold: 1}]}
+		{urls: [{url: 'https://example.com', threshold: 1}]},
+		{threshold: 2, defaults: {threshold: 3}, urls: [{url: 'https://example.com', threshold: 4}]}
 	]) {
-		await assert.rejects(loadConfig({config}), /action threshold input/);
+		const original = structuredClone(config);
+		Object.freeze(config.defaults);
+		config.urls?.forEach(Object.freeze);
+		Object.freeze(config.urls);
+		Object.freeze(config);
+		const warnings = [];
+		const loaded = await loadConfig({config}, message => warnings.push(message));
+		assert.equal(loaded.threshold, 0);
+		assert.equal(loaded.defaults.threshold, 0);
+		assert.ok(loaded.urls.every(url => typeof url === 'string' || url.threshold === 0));
+		assert.deepEqual(config, original);
+		assert.equal(warnings.length, 1);
+		assert.match(warnings[0], /original config is unchanged/);
 	}
-	assert.deepEqual((await loadConfig({config: {defaults: {threshold: 0}}})).defaults, {threshold: 0, reporters: []});
+});
+
+test('loadConfig leaves missing or zero thresholds quiet', async () => {
+	for (const config of [{}, {threshold: 0, defaults: {threshold: 0}, urls: [{url: 'https://example.com', threshold: 0}]}]) {
+		const warnings = [];
+		await loadConfig({config}, message => warnings.push(message));
+		assert.deepEqual(warnings, []);
+	}
 });
 
 test('loadConfig disables configured reporters without mutating the config', async () => {
 	const config = Object.freeze({defaults: Object.freeze({reporters: ['json'], timeout: 5000})});
-	assert.deepEqual(await loadConfig({config}), {defaults: {reporters: [], timeout: 5000}, urls: []});
+	assert.deepEqual(await loadConfig({config}), {threshold: 0, defaults: {threshold: 0, reporters: [], timeout: 5000}, urls: []});
 	assert.deepEqual(config.defaults.reporters, ['json']);
 });
 

@@ -62,16 +62,28 @@ test('the bundle preserves passing, failing, and action-threshold behavior', asy
 	assert.ok(fs.existsSync(allowed.outputs['report-json']));
 });
 
-test('the bundle rejects duplicate scenarios and config thresholds', async () => {
-	for (const [name, config, expected] of [
-		['duplicate', {defaults, urls: [failing, {url: failing, ignore: ['*']}]}, /duplicate URL/],
-		['config-threshold', {defaults: {...defaults, threshold: 1000}, urls: [failing]}, /action threshold input/],
-		['url-threshold', {defaults, urls: [{url: failing, threshold: 1000}]}, /action threshold input/]
+test('the bundle rejects duplicate scenarios', async () => {
+	const result = await run('duplicate', {defaults, urls: [failing, {url: failing, ignore: ['*']}]});
+	assert.equal(result.code, 1);
+	assert.match(result.stdout, /duplicate URL/);
+	assert.notEqual(result.outputs.passed, 'true');
+});
+
+test('the bundle overrides shared config thresholds without changing the source file', async () => {
+	for (const [name, config] of [
+		['config-threshold', {threshold: 1000, defaults: {...defaults, threshold: 1000}, urls: [failing]}],
+		['url-threshold', {defaults, urls: [{url: failing, threshold: 1000}]}]
 	]) {
 		const result = await run(name, config);
 		assert.equal(result.code, 1);
-		assert.match(result.stdout, expected);
-		assert.notEqual(result.outputs.passed, 'true');
+		assert.equal(result.outputs.passed, 'false');
+		assert.ok(Number(result.outputs['total-issues']) > 0);
+		assert.match(result.stdout, /::warning::Config thresholds are overridden/);
+		assert.equal(fs.readFileSync(path.join(directory, `${name}.json`), 'utf8'), JSON.stringify(config));
+		const allowed = await run(name, config, {INPUT_THRESHOLD: result.outputs['total-issues']});
+		assert.equal(allowed.code, 0, allowed.stdout + allowed.stderr);
+		assert.equal(allowed.outputs['total-issues'], result.outputs['total-issues']);
+		assert.equal(fs.readFileSync(path.join(directory, `${name}.json`), 'utf8'), JSON.stringify(config));
 	}
 });
 
