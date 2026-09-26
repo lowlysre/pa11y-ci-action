@@ -142,3 +142,12 @@ jobs:
             echo "expected a cache hit, got '$CACHE_HIT'" >&2
             exit 1
           fi
+
+  are-we-good:
+    runs-on: ubuntu-slim
+    needs: [test, build-check, e2e, e2e-cache, zizmor]
+    if: always()
+    steps:
+      - uses: lowlydba/are-we-good@6b10e5f2697555fbaf7f8f37ce38d4454c954a4c # v1.2.2
+        with:
+          jobs: ${{ toJSON(needs) }}
