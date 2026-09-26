@@ -1,5 +1,8 @@
 <p align="center">
-  <img src="assets/hero.svg" alt="pa11y-ci-action" width="600">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.svg">
+    <img src="assets/hero-light.svg" alt="pa11y-ci-action" width="440">
+  </picture>
 </p>
 
 <p align="center">
