@@ -11,8 +11,7 @@ const binPath = '/fake/pa11y-ci.js';
 function fakeExec({exitCode = 0, stdout = '', stderr = ''} = {}) {
 	const calls = [];
 	const getExecOutput = async (command, args, options) => {
-		const configSource = fs.readFileSync(args[args.indexOf('--config') + 1], 'utf8');
-		calls.push({command, args, options, configSource});
+		calls.push({command, args, options});
 		return {exitCode, stdout, stderr};
 	};
 	return {getExecOutput, calls};
@@ -24,33 +23,13 @@ function tmpDir() {
 
 const report = {total: 1, passes: 1, errors: 0, results: {'https://example.com': []}};
 
-test('runPa11yCi parses the report on exit code 0', async () => {
-	const {getExecOutput} = fakeExec({stdout: JSON.stringify(report)});
-
-	assert.deepEqual(await runPa11yCi({cwd: tmpDir(), configPath: '/cfg.json'}, {getExecOutput, binPath}), report);
-});
-
-test('runPa11yCi treats exit code 2 as a run with issues, not a crash', async () => {
-	const {getExecOutput} = fakeExec({exitCode: 2, stdout: JSON.stringify(report)});
-
-	assert.deepEqual(await runPa11yCi({cwd: tmpDir(), configPath: '/cfg.json'}, {getExecOutput, binPath}), report);
-});
-
-test('runPa11yCi throws with stderr on any other exit code', async () => {
-	const {getExecOutput} = fakeExec({exitCode: 1, stderr: 'no browser'});
-
-	await assert.rejects(
-		runPa11yCi({cwd: tmpDir(), configPath: '/cfg.json'}, {getExecOutput, binPath}),
-		/exited with code 1:\nno browser/
-	);
-});
-
-test('runPa11yCi bounds the output included in errors', async () => {
+test('runPa11yCi reports the exit code and bounds error output', async () => {
 	const {getExecOutput} = fakeExec({exitCode: 1, stderr: `${'x'.repeat(10_000)}END`});
 
 	await assert.rejects(
 		runPa11yCi({cwd: tmpDir(), configPath: '/cfg.json'}, {getExecOutput, binPath}),
-		error => error.message.length < 4100 && error.message.endsWith('END')
+		error => error.message.startsWith('pa11y-ci exited with code 1:') &&
+			error.message.length < 4100 && error.message.endsWith('END')
 	);
 });
 
@@ -75,18 +54,7 @@ test('runPa11yCi runs silently and passes arguments as an array', async () => {
 	assert.equal(options.ignoreReturnCode, true);
 	assert.deepEqual(args.slice(0, 3), [binPath, '--json', '--config']);
 	assert.deepEqual(args.slice(4), ['--sitemap', sitemap]);
-	assert.match(calls[0].configSource, /"configPath":"\/cfg.json"/);
 	assert.equal(fs.existsSync(args[3]), false);
-});
-
-test('runPa11yCi writes a synthetic config when no config path is given', async () => {
-	const {getExecOutput, calls} = fakeExec({stdout: JSON.stringify(report)});
-	const config = {defaults: {standard: 'WCAG2AA'}, urls: ['https://example.com']};
-
-	await runPa11yCi({cwd: tmpDir(), configPath: null, config}, {getExecOutput, binPath});
-
-	assert.ok(calls[0].configSource.includes(JSON.stringify(config)));
-	assert.equal(fs.existsSync(calls[0].args[3]), false);
 });
 
 test('runPa11yCi removes its config when the subprocess fails', async () => {

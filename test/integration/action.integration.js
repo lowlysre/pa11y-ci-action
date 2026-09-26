@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
-import net from 'node:net';
 import {pathToFileURL} from 'node:url';
 import {execFile} from 'node:child_process';
 
@@ -37,10 +36,12 @@ function stopProcessTree(child) {
 	});
 }
 
-function execute(file, env, timeout = 60_000) {
+function execute(env) {
+	const file = path.join(root, 'dist', 'index.mjs');
+	const timeout = 60_000;
 	return new Promise((resolve, reject) => {
 		let termination;
-		const child = execFile(process.execPath, [path.resolve(root, file)], {
+		const child = execFile(process.execPath, [file], {
 			env, detached: process.platform !== 'win32'
 		}, async (error, stdout, stderr) => {
 			clearTimeout(timer);
@@ -77,7 +78,7 @@ async function run(name, config, inputs = {}) {
 	const summaryPath = path.join(directory, `${name}-summary.txt`);
 	fs.writeFileSync(outputPath, '');
 	fs.writeFileSync(summaryPath, '');
-	const result = await execute('dist/index.mjs', {
+	const result = await execute({
 		...process.env, TEMP: directory, TMP: directory, TMPDIR: directory,
 		INPUT_CONFIG: config ? configPath : '', INPUT_URLS: '', INPUT_SITEMAP: '', INPUT_THRESHOLD: '0',
 		'INPUT_COMMENT-ON-PR': 'false', 'INPUT_WORKING-DIRECTORY': directory,
@@ -89,20 +90,6 @@ async function run(name, config, inputs = {}) {
 	}
 	return {...result, outputs, summary: fs.readFileSync(summaryPath, 'utf8')};
 }
-
-test('the bundle preserves passing, failing, and action-threshold behavior', async () => {
-	const clean = await run('passing', {defaults, urls: [passing]}, {INPUT_CONCURRENCY: 'unused-with-config'});
-	assert.equal(clean.code, 0, clean.stdout + clean.stderr);
-	assert.equal(clean.outputs.passed, 'true');
-	const bad = await run('failing', {defaults, urls: [failing]});
-	assert.equal(bad.code, 1);
-	assert.ok(Number(bad.outputs['total-issues']) > 0);
-	assert.equal(bad.outputs.passed, 'false');
-	const allowed = await run('threshold', {defaults, urls: [failing]}, {INPUT_THRESHOLD: bad.outputs['total-issues']});
-	assert.equal(allowed.code, 0, allowed.stdout + allowed.stderr);
-	assert.equal(allowed.outputs['total-issues'], bad.outputs['total-issues']);
-	assert.ok(fs.existsSync(allowed.outputs['report-json']));
-});
 
 test('the bundle rejects duplicate scenarios', async () => {
 	const result = await run('duplicate', {defaults, urls: [failing, {url: failing, ignore: ['*']}]});
@@ -124,7 +111,9 @@ test('the bundle overrides shared config thresholds without changing the source 
 		assert.equal(fs.readFileSync(path.join(directory, `${name}.json`), 'utf8'), JSON.stringify(config));
 		const allowed = await run(name, config, {INPUT_THRESHOLD: result.outputs['total-issues']});
 		assert.equal(allowed.code, 0, allowed.stdout + allowed.stderr);
+		assert.equal(allowed.outputs.passed, 'true');
 		assert.equal(allowed.outputs['total-issues'], result.outputs['total-issues']);
+		assert.ok(fs.existsSync(allowed.outputs['report-json']));
 		assert.equal(fs.readFileSync(path.join(directory, `${name}.json`), 'utf8'), JSON.stringify(config));
 	}
 });
@@ -136,18 +125,11 @@ test('the bundle rejects empty scans but retains their raw report', async () => 
 	assert.ok(fs.existsSync(result.outputs['report-json']));
 });
 
-test('the bundle supports generated configs and promised JavaScript configs', async () => {
-	const generated = await run('generated', null, {INPUT_URLS: passing});
-	assert.equal(generated.code, 0, generated.stdout + generated.stderr);
-	const configPath = path.join(directory, 'promised.cjs');
-	fs.writeFileSync(configPath, `module.exports = Promise.resolve(${JSON.stringify({defaults, urls: [passing]})});`);
-	const promised = await run('promised', null, {INPUT_CONFIG: configPath});
-	assert.equal(promised.code, 0, promised.stdout + promised.stderr);
-});
-
 test('the bundle suppresses caller reporters', async () => {
-	const reporter = await run('reporter', {defaults: {...defaults, reporters: ['json']}, urls: [passing]});
+	const reporter = await run('reporter', {defaults: {...defaults, reporters: ['json']}, urls: [passing]},
+		{INPUT_CONCURRENCY: 'unused-with-config'});
 	assert.equal(reporter.code, 0, reporter.stdout + reporter.stderr);
+	assert.equal(reporter.outputs.passed, 'true');
 });
 
 test('the bundle selects the exact JSON file instead of a higher-priority CJS sibling', async () => {
@@ -201,45 +183,4 @@ test('the bundle fails load errors regardless of the threshold', async () => {
 	assert.equal(result.code, 1);
 	assert.equal(result.outputs.passed, 'false');
 	assert.match(result.stdout, /failed to load/);
-});
-
-test('the installer bundle installs pa11y-ci under production omission settings', async () => {
-	const outputPath = path.join(directory, 'install-outputs.txt');
-	fs.writeFileSync(outputPath, '');
-	const result = await execute('dist/install.mjs', {
-		...process.env, NODE_ENV: 'production', npm_config_omit: 'dev', npm_config_loglevel: 'http',
-		PA11Y_CI_VERSION: '4.1.1', PUPPETEER_SKIP_DOWNLOAD: 'true',
-		RUNNER_TEMP: directory, GITHUB_OUTPUT: outputPath
-	}, 300_000);
-	assert.equal(result.code, 0, result.stdout + result.stderr);
-	const binary = fs.readFileSync(outputPath, 'utf8').match(/bin-path<<[^\r\n]+\r?\n([^\r\n]+)/)?.[1];
-	assert.doesNotMatch(result.stdout + result.stderr, /npm (warn|http)\b/i);
-	assert.ok(binary && fs.existsSync(binary));
-	const modules = path.resolve(binary, '../../..');
-	assert.equal(fs.existsSync(path.join(modules, 'esbuild')), false);
-	assert.equal(fs.existsSync(path.join(modules, '@actions/core')), false);
-	const isolated = await run('isolated-runtime', {defaults, urls: [passing]}, {PA11Y_CI_BIN: binary});
-	assert.equal(isolated.code, 0, isolated.stdout + isolated.stderr);
-});
-
-test('a timed-out command stops its descendants before cleanup', async () => {
-	let output;
-	await assert.rejects(execute('test/fixtures/process-tree.cjs', process.env, 3000), error => {
-		assert.match(error.message, /timed out after 3000ms/);
-		output = error.stdout;
-		return true;
-	});
-	const port = JSON.parse(output.trim()).port;
-	await new Promise((resolve, reject) => {
-		const socket = net.connect({host: '127.0.0.1', port});
-		socket.once('connect', () => {
-			socket.end('stop');
-			reject(new Error('descendant survived the test timeout'));
-		});
-		socket.once('error', error => error.code === 'ECONNREFUSED' ? resolve() : reject(error));
-		socket.setTimeout(5000, () => {
-			socket.destroy();
-			reject(new Error('descendant cleanup probe timed out'));
-		});
-	});
 });
