@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.svg">
-    <img src="assets/hero-light.svg" alt="pa11y-ci-action" width="440">
-  </picture>
+  <img src="assets/hero.svg" alt="pa11y-ci-action: accessibility checks in CI, reported where you'll read them" width="100%">
 </p>
 
 <p align="center">

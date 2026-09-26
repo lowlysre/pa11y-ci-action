@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="640" height="120" viewBox="0 0 640 120" role="img" aria-labelledby="hero-title-dark hero-desc-dark">
-  <title id="hero-title-dark">pa11y-ci-action</title>
-  <desc id="hero-desc-dark">A GitHub Action wrapper for pa11y-ci.</desc>
-  <circle cx="60" cy="60" r="34" fill="none" stroke="#a371f7" stroke-width="6"/>
-  <path d="M44 61 L56 74 L80 46" fill="none" stroke="#a371f7" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="112" y="56" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="30" font-weight="600" fill="#e6edf3">pa11y-ci-action</text>
-  <text x="112" y="82" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" fill="#9198a1">Accessibility checks for your CI</text>
-</svg>
