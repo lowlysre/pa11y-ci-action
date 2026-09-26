@@ -18,6 +18,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node-version }}
@@ -29,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
@@ -48,19 +52,23 @@ jobs:
     needs: build-check
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: passing
-        uses: ./
+        uses: $/
         with:
           urls: file://${{ github.workspace }}/test/fixtures/passing.html
       - name: Assert the passing fixture reported zero issues
         run: |
-          if [ "${{ steps.passing.outputs.total-issues }}" != "0" ]; then
-            echo "expected 0 issues, got ${{ steps.passing.outputs.total-issues }}" >&2
+          if [ "${STEPS_PASSING_OUTPUTS_TOTAL_ISSUES}" != "0" ]; then
+            echo "expected 0 issues, got ${STEPS_PASSING_OUTPUTS_TOTAL_ISSUES}" >&2
             exit 1
           fi
+        env:
+          STEPS_PASSING_OUTPUTS_TOTAL_ISSUES: ${{ steps.passing.outputs.total-issues }}
       - id: failing
         continue-on-error: true
-        uses: ./
+        uses: $/
         with:
           urls: file://${{ github.workspace }}/test/fixtures/failing.html
           # Covers the cache-off path; the passing step above covers cache-on.
@@ -71,22 +79,82 @@ jobs:
             echo "expected the failing fixture to fail the action, got outcome '${{ steps.failing.outcome }}'" >&2
             exit 1
           fi
-          if [ "${{ steps.failing.outputs.total-issues }}" == "0" ]; then
+          if [ "${STEPS_FAILING_OUTPUTS_TOTAL_ISSUES}" == "0" ]; then
             echo "expected the failing fixture to report issues" >&2
             exit 1
           fi
+        env:
+          STEPS_FAILING_OUTPUTS_TOTAL_ISSUES: ${{ steps.failing.outputs.total-issues }}
       - name: Serve fixtures for the sitemap test
         run: python3 -m http.server 8080 --directory test/fixtures &
       - id: sitemap
-        uses: ./
+        uses: $/
         with:
           sitemap: http://127.0.0.1:8080/sitemap.xml
       - name: Assert the sitemap URLs were tested
         run: |
-          if [ "${{ steps.sitemap.outputs.total-urls }}" != "1" ]; then
-            echo "expected 1 URL from the sitemap, got '${{ steps.sitemap.outputs.total-urls }}'" >&2
+          if [ "${STEPS_SITEMAP_OUTPUTS_TOTAL_URLS}" != "1" ]; then
+            echo "expected 1 URL from the sitemap, got '${STEPS_SITEMAP_OUTPUTS_TOTAL_URLS}'" >&2
             exit 1
           fi
+        env:
+          STEPS_SITEMAP_OUTPUTS_TOTAL_URLS: ${{ steps.sitemap.outputs.total-urls }}
+
+  e2e-cross-platform:
+    needs: build-check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build fixture file URLs
+        id: fixtures
+        shell: bash
+        run: |
+          node -e "const {pathToFileURL} = require('node:url'); for (const name of ['passing', 'failing']) console.log(name + '=' + pathToFileURL('test/fixtures/' + name + '.html').href)" >> "$GITHUB_OUTPUT"
+      - id: passing
+        uses: $/
+        with:
+          urls: ${{ steps.fixtures.outputs.passing }}
+      - name: Assert the passing fixture reported zero issues
+        shell: bash
+        env:
+          TOTAL_ISSUES: ${{ steps.passing.outputs.total-issues }}
+        run: |
+          if [ "$TOTAL_ISSUES" != "0" ]; then
+            echo "expected 0 issues, got '$TOTAL_ISSUES'" >&2
+            exit 1
+          fi
+      - id: failing
+        continue-on-error: true
+        uses: $/
+        with:
+          urls: ${{ steps.fixtures.outputs.failing }}
+      - name: Assert the failing fixture failed the action
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.failing.outcome }}
+          TOTAL_ISSUES: ${{ steps.failing.outputs.total-issues }}
+        run: |
+          if [ "$OUTCOME" != "failure" ] || [ -z "$TOTAL_ISSUES" ] || [ "$TOTAL_ISSUES" == "0" ]; then
+            echo "expected the failing fixture to fail with issues, got outcome '$OUTCOME' and '$TOTAL_ISSUES' issues" >&2
+            exit 1
+          fi
+
+  zizmor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          # Fail the job on findings instead of uploading SARIF to code scanning.
+          advanced-security: false
 
   e2e-cache:
     runs-on: ubuntu-latest
@@ -94,13 +162,17 @@ jobs:
     needs: e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: cached
-        uses: ./
+        uses: $/
         with:
           urls: file://${{ github.workspace }}/test/fixtures/passing.html
       - name: Assert the Chromium cache was restored
         run: |
-          if [ "${{ steps.cached.outputs.cache-hit }}" != "true" ]; then
-            echo "expected a cache hit, got '${{ steps.cached.outputs.cache-hit }}'" >&2
+          if [ "${STEPS_CACHED_OUTPUTS_CACHE_HIT}" != "true" ]; then
+            echo "expected a cache hit, got '${STEPS_CACHED_OUTPUTS_CACHE_HIT}'" >&2
             exit 1
           fi
+        env:
+          STEPS_CACHED_OUTPUTS_CACHE_HIT: ${{ steps.cached.outputs.cache-hit }}
