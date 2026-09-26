@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node-version: ['22', '24', '26']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ matrix.node-version }}
+      - uses: lowlydba/sustainable-npm@4cc1da285e5a589a7b3816122f791c21ec6ff3e6 # v4.0.0
+      - run: npm ci
+      - run: npm test
+
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+      - uses: lowlydba/sustainable-npm@4cc1da285e5a589a7b3816122f791c21ec6ff3e6 # v4.0.0
+      - run: npm ci
+      - run: npm run build
+      - name: Fail if dist/ is out of date
+        run: |
+          if ! git diff --quiet -- dist; then
+            echo "dist/ is out of date. Run 'npm run build' and commit the result." >&2
+            git diff -- dist
+            exit 1
+          fi
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: build-check
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: passing
+        uses: ./
+        with:
+          urls: file://${{ github.workspace }}/test/fixtures/passing.html
+      - name: Assert the passing fixture reported zero issues
+        run: |
+          if [ "${{ steps.passing.outputs.total-issues }}" != "0" ]; then
+            echo "expected 0 issues, got ${{ steps.passing.outputs.total-issues }}" >&2
+            exit 1
+          fi
+      - id: failing
+        continue-on-error: true
+        uses: ./
+        with:
+          urls: file://${{ github.workspace }}/test/fixtures/failing.html
+          # Covers the cache-off path; the passing step above covers cache-on.
+          cache: 'false'
+      - name: Assert the failing fixture failed the action
+        run: |
+          if [ "${{ steps.failing.outcome }}" != "failure" ]; then
+            echo "expected the failing fixture to fail the action, got outcome '${{ steps.failing.outcome }}'" >&2
+            exit 1
+          fi
+          if [ "${{ steps.failing.outputs.total-issues }}" == "0" ]; then
+            echo "expected the failing fixture to report issues" >&2
+            exit 1
+          fi
+      - name: Serve fixtures for the sitemap test
+        run: python3 -m http.server 8080 --directory test/fixtures &
+      - id: sitemap
+        uses: ./
+        with:
+          sitemap: http://127.0.0.1:8080/sitemap.xml
+      - name: Assert the sitemap URLs were tested
+        run: |
+          if [ "${{ steps.sitemap.outputs.total-urls }}" != "1" ]; then
+            echo "expected 1 URL from the sitemap, got '${{ steps.sitemap.outputs.total-urls }}'" >&2
+            exit 1
+          fi
+
+  e2e-cache:
+    runs-on: ubuntu-latest
+    # Runs after e2e so the Chromium cache that job saved is available.
+    needs: e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: cached
+        uses: ./
+        with:
+          urls: file://${{ github.workspace }}/test/fixtures/passing.html
+      - name: Assert the Chromium cache was restored
+        run: |
+          if [ "${{ steps.cached.outputs.cache-hit }}" != "true" ]; then
+            echo "expected a cache hit, got '${{ steps.cached.outputs.cache-hit }}'" >&2
+            exit 1
+          fi

@@ -1,0 +1,103 @@
+name: 'pa11y-ci-action'
+description: 'Run pa11y-ci accessibility checks and report results as a job summary and, optionally, a PR comment.'
+author: 'lowlysre'
+branding:
+  icon: 'check-circle'
+  color: 'purple'
+
+inputs:
+  config:
+    description: 'Path to an existing pa11y-ci config file (JSON or JS). If omitted, one is looked up at `.pa11yci`/`.pa11yci.json`, then synthesized from the `urls`/`sitemap`/`standard`/`concurrency` inputs.'
+    required: false
+  urls:
+    description: 'Newline-separated list of URLs to test. Only used when no config file is found.'
+    required: false
+  sitemap:
+    description: 'Sitemap URL to crawl for pages to test.'
+    required: false
+  standard:
+    description: 'Accessibility standard to test against: WCAG2A, WCAG2AA, or WCAG2AAA. Only used when no config file is found.'
+    required: false
+    default: 'WCAG2AA'
+  threshold:
+    description: 'Number of issues permitted across all URLs before the action fails.'
+    required: false
+    default: '0'
+  concurrency:
+    description: 'Number of pages to test in parallel. Only used when no config file is found.'
+    required: false
+    default: '1'
+  working-directory:
+    description: 'Directory to resolve the config file and run pa11y-ci from.'
+    required: false
+    default: '.'
+  pa11y-ci-version:
+    description: 'Version of `pa11y-ci` to install and run, as an npm version range (e.g. `4.1.1`, `^4.0.0`).'
+    required: false
+    default: '4.1.1'
+  cache:
+    description: 'Cache the Chromium build pa11y-ci downloads, keyed on OS, architecture, and `pa11y-ci-version`. Set to `false` to download it fresh every run.'
+    required: false
+    default: 'true'
+  comment-on-pr:
+    description: 'Post or update a sticky summary comment on the triggering pull request.'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token used to post the PR comment. Requires `pull-requests: write`.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  total-urls:
+    description: 'Number of URLs tested.'
+    value: ${{ steps.run.outputs.total-urls }}
+  passed-urls:
+    description: 'Number of URLs with no issues.'
+    value: ${{ steps.run.outputs.passed-urls }}
+  total-issues:
+    description: 'Total number of issues found across all URLs.'
+    value: ${{ steps.run.outputs.total-issues }}
+  passed:
+    description: '`true` if every URL loaded and `total-issues` is within `threshold`.'
+    value: ${{ steps.run.outputs.passed }}
+  report-json:
+    description: 'Path to the raw pa11y-ci JSON report written to the runner temp directory.'
+    value: ${{ steps.run.outputs.report-json }}
+  cache-hit:
+    description: '`true` if the Chromium cache was restored. Empty when `cache` is `false`.'
+    value: ${{ steps.cache.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Cache Chromium
+      id: cache
+      if: inputs.cache == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/pa11y-ci-action/puppeteer
+        key: pa11y-ci-action-chromium-${{ runner.os }}-${{ runner.arch }}-${{ inputs.pa11y-ci-version }}
+    - name: Install pa11y-ci
+      shell: bash
+      run: npm install --no-save --no-audit --no-fund --prefix "$ACTION_PATH" "pa11y-ci@$PA11Y_CI_VERSION"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PA11Y_CI_VERSION: ${{ inputs.pa11y-ci-version }}
+        PUPPETEER_CACHE_DIR: ${{ runner.temp }}/pa11y-ci-action/puppeteer
+    - name: Run pa11y-ci-action
+      id: run
+      shell: bash
+      run: node "$ACTION_PATH/dist/index.mjs"
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PUPPETEER_CACHE_DIR: ${{ runner.temp }}/pa11y-ci-action/puppeteer
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_URLS: ${{ inputs.urls }}
+        INPUT_SITEMAP: ${{ inputs.sitemap }}
+        INPUT_STANDARD: ${{ inputs.standard }}
+        INPUT_THRESHOLD: ${{ inputs.threshold }}
+        INPUT_CONCURRENCY: ${{ inputs.concurrency }}
+        INPUT_WORKING-DIRECTORY: ${{ inputs.working-directory }}
+        INPUT_COMMENT-ON-PR: ${{ inputs.comment-on-pr }}
+        INPUT_GITHUB-TOKEN: ${{ inputs.github-token }}
