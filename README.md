@@ -97,7 +97,7 @@ jobs:
 | `config` | Path to an existing pa11y-ci config file. | looked up automatically |
 | `urls` | Newline-separated URLs to test. Only used when no config file is found. | |
 | `sitemap` | Sitemap URL to crawl. Only used when no config file is found. | |
-| `standard` | `WCAG2A`, `WCAG2AA`, `WCAG2AAA`, or `Section508`. Only used when no config file is found. | `WCAG2AA` |
+| `standard` | `WCAG2A`, `WCAG2AA`, or `WCAG2AAA`. Only used when no config file is found. | `WCAG2AA` |
 | `threshold` | Number of issues permitted before the action fails. | `0` |
 | `concurrency` | Pages to test in parallel. Only used when no config file is found. | `1` |
 | `working-directory` | Directory to resolve the config file and run pa11y-ci from. | `.` |

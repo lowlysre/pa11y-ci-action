@@ -24,8 +24,12 @@
     <text x="72" y="214" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="58" font-weight="700" fill="#e6edf3" letter-spacing="-1.5">pa11y-ci-action</text>
     <text x="72" y="256" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" fill="#9198a1">Accessibility checks in CI, reported where you'll read them.</text>
     <g font-size="14">
-      <rect x="72" y="290" width="92" height="30" rx="15" fill="none" stroke="#a371f7"/>
-      <text x="118" y="310" text-anchor="middle" fill="#a371f7">WCAG2AA</text>
+      <rect x="72" y="290" width="80" height="30" rx="15" fill="none" stroke="#a371f7"/>
+      <text x="112" y="310" text-anchor="middle" fill="#a371f7">WCAG2A</text>
+      <rect x="164" y="290" width="92" height="30" rx="15" fill="none" stroke="#a371f7"/>
+      <text x="210" y="310" text-anchor="middle" fill="#a371f7">WCAG2AA</text>
+      <rect x="268" y="290" width="104" height="30" rx="15" fill="none" stroke="#a371f7"/>
+      <text x="320" y="310" text-anchor="middle" fill="#a371f7">WCAG2AAA</text>
     </g>
   </g>
 

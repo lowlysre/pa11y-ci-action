@@ -16,7 +16,7 @@ inputs:
     description: 'Sitemap URL to crawl for pages to test.'
     required: false
   standard:
-    description: 'Accessibility standard to test against: WCAG2A, WCAG2AA, WCAG2AAA, or Section508. Only used when no config file is found.'
+    description: 'Accessibility standard to test against: WCAG2A, WCAG2AA, or WCAG2AAA. Only used when no config file is found.'
     required: false
     default: 'WCAG2AA'
   threshold:
