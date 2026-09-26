@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {permissionWarning, resolveTokenLogin, upsertComment} from '../../src/lib/comment.js';
-import {MARKER} from '../../src/lib/report.js';
+import {MARKER, commentMarker} from '../../src/lib/report.js';
 
 test('permissionWarning explains a 403 as a likely missing pull-requests: write permission', () => {
 	assert.match(permissionWarning({status: 403}), /pull-requests: write/);
@@ -139,5 +139,15 @@ test('upsertComment matches a PAT user\'s own comment', async () => {
 
 	await upsertComment(octokit, target);
 
+	assert.deepEqual(calls.update.map(call => call.comment_id), [2]);
+});
+
+test('upsertComment keeps independent action comments separate', async () => {
+	const marker = commentMarker('site-b');
+	const {octokit, calls} = fakeOctokit({comments: [
+		{id: 1, body: commentMarker('site-a'), user: bot},
+		{id: 2, body: marker, user: bot}
+	]});
+	await upsertComment(octokit, {...target, marker});
 	assert.deepEqual(calls.update.map(call => call.comment_id), [2]);
 });

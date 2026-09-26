@@ -7,13 +7,13 @@ branding:
 
 inputs:
   config:
-    description: 'Path to an existing pa11y-ci config file (JSON or JS). If omitted, one is looked up at `.pa11yci`/`.pa11yci.json`, then synthesized from the `urls`/`sitemap`/`standard`/`concurrency` inputs.'
+    description: 'Exact path to a pa11y-ci config file (JSON or JS). If omitted, looks for `.pa11yci`, `.pa11yci.json`, `.pa11yci.js`, or `.pa11yci.cjs`, then builds a config from the inputs.'
     required: false
   urls:
     description: 'Newline-separated list of URLs to test. Only used when no config file is found.'
     required: false
   sitemap:
-    description: 'Sitemap URL to crawl for pages to test.'
+    description: 'Sitemap URL to crawl. Adds pages to the config URLs, including when using an existing config.'
     required: false
   standard:
     description: 'Accessibility standard to test against: WCAG2A, WCAG2AA, or WCAG2AAA. Only used when no config file is found.'
@@ -36,13 +36,16 @@ inputs:
     required: false
     default: '4.1.1'
   cache:
-    description: 'Cache the Chromium build pa11y-ci downloads, keyed on OS, architecture, and `pa11y-ci-version`. Set to `false` to download it fresh every run.'
+    description: 'Restore and save the Chromium cache, keyed on OS, architecture, and `pa11y-ci-version`. Set to `false` to skip the Actions cache.'
     required: false
     default: 'true'
   comment-on-pr:
     description: 'Post or update a sticky summary comment on the triggering pull request.'
     required: false
     default: 'false'
+  comment-id:
+    description: 'Stable identifier for the sticky PR comment. Defaults to the workflow, job, and action identity. Set a unique value for each matrix entry.'
+    required: false
   github-token:
     description: 'Token used to post the PR comment. Requires `pull-requests: write`.'
     required: false
@@ -78,11 +81,12 @@ runs:
       with:
         path: ${{ runner.temp }}/pa11y-ci-action/puppeteer
         key: pa11y-ci-action-chromium-${{ runner.os }}-${{ runner.arch }}-${{ inputs.pa11y-ci-version }}
-    # pa11y-ci is installed at run time, not locked, so callers can pick any
-    # version via `pa11y-ci-version`; see the README's Design section.
     - name: Install pa11y-ci
+      id: install
       shell: bash
-      run: npm install --no-save --no-audit --no-fund --prefix "$ACTION_PATH" "pa11y-ci@$PA11Y_CI_VERSION" # zizmor: ignore[adhoc-packages]
+      run: |
+        node -e "if (Number(process.versions.node.split('.')[0]) < 22) throw new Error('pa11y-ci-action requires Node.js 22 or newer. Run actions/setup-node before this action.')"
+        node "$ACTION_PATH/dist/install.mjs"
       env:
         ACTION_PATH: ${{ github.action_path }}
         PA11Y_CI_VERSION: ${{ inputs.pa11y-ci-version }}
@@ -93,6 +97,7 @@ runs:
       run: node "$ACTION_PATH/dist/index.mjs"
       env:
         ACTION_PATH: ${{ github.action_path }}
+        PA11Y_CI_BIN: ${{ steps.install.outputs.bin-path }}
         PUPPETEER_CACHE_DIR: ${{ runner.temp }}/pa11y-ci-action/puppeteer
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_URLS: ${{ inputs.urls }}
@@ -102,4 +107,5 @@ runs:
         INPUT_CONCURRENCY: ${{ inputs.concurrency }}
         INPUT_WORKING-DIRECTORY: ${{ inputs.working-directory }}
         INPUT_COMMENT-ON-PR: ${{ inputs.comment-on-pr }}
+        INPUT_COMMENT-ID: ${{ inputs.comment-id }}
         INPUT_GITHUB-TOKEN: ${{ inputs.github-token }}

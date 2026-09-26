@@ -6,8 +6,9 @@
   "description": "A GitHub Action wrapper for pa11y-ci",
   "main": "src/index.js",
   "scripts": {
-    "build": "esbuild src/index.js --bundle --platform=node --target=node22 --format=esm --outfile=dist/index.mjs --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
-    "test": "node --test \"test/**/*.test.js\""
+    "build": "node scripts/build.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:integration": "node --test \"test/integration/*.integration.js\""
   },
   "license": "MIT",
   "repository": {

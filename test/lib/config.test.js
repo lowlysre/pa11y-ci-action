@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import {findConfigPath, buildSyntheticConfig, parseUrlsInput, parseIntegerInput} from '../../src/lib/config.js';
+import {findConfigPath, buildSyntheticConfig, parseUrlsInput, parseIntegerInput, loadConfig} from '../../src/lib/config.js';
 
 test('findConfigPath returns the explicit config path when it exists', () => {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pa11y-ci-action-test-'));
@@ -81,4 +81,49 @@ test('parseIntegerInput rejects junk, decimals, negatives, and unsafe integers',
 
 test('parseIntegerInput rejects values below the minimum', () => {
 	assert.throws(() => parseIntegerInput('concurrency', '0', {min: 1}), /at least 1, got "0"/);
+});
+
+test('loadConfig rejects duplicate scenarios and thresholds that hide issues', async () => {
+	await assert.rejects(loadConfig({config: {urls: ['https://example.com', {url: 'https://example.com'}]}}), /duplicate URL/);
+	for (const config of [
+		{threshold: 1},
+		{defaults: {threshold: 1}},
+		{urls: [{url: 'https://example.com', threshold: 1}]}
+	]) {
+		await assert.rejects(loadConfig({config}), /action threshold input/);
+	}
+	assert.deepEqual((await loadConfig({config: {defaults: {threshold: 0}}})).defaults, {threshold: 0, reporters: []});
+});
+
+test('loadConfig disables configured reporters without mutating the config', async () => {
+	const config = Object.freeze({defaults: Object.freeze({reporters: ['json'], timeout: 5000})});
+	assert.deepEqual(await loadConfig({config}), {defaults: {reporters: [], timeout: 5000}, urls: []});
+	assert.deepEqual(config.defaults.reporters, ['json']);
+});
+
+test('loadConfig loads the exact JSON path even with a sibling CJS file', async t => {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pa11y-ci-config-'));
+	t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+	const configPath = path.join(directory, 'config.json');
+	fs.writeFileSync(configPath, JSON.stringify({urls: ['https://example.com/json']}));
+	fs.writeFileSync(path.join(directory, 'config.cjs'), 'module.exports = {urls: ["https://example.com/cjs"]};');
+	assert.deepEqual((await loadConfig({configPath})).urls, ['https://example.com/json']);
+});
+
+test('loadConfig supports promised CJS and ESM configs with relative imports', async t => {
+	const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pa11y-ci-config-'));
+	t.after(() => fs.rmSync(directory, {recursive: true, force: true}));
+	fs.writeFileSync(path.join(directory, 'urls.json'), '["https://example.com"]');
+	const commonjs = path.join(directory, 'config.cjs');
+	fs.writeFileSync(commonjs, 'module.exports = Promise.resolve({urls: require("./urls.json")});');
+	assert.deepEqual((await loadConfig({configPath: commonjs})).urls, ['https://example.com']);
+	const esm = path.join(directory, 'config.mjs');
+	fs.writeFileSync(esm, 'export default {urls: ["https://example.com/esm"]};');
+	assert.deepEqual((await loadConfig({configPath: esm})).urls, ['https://example.com/esm']);
+});
+
+test('loadConfig rejects invalid config shapes', async () => {
+	for (const config of [null, [], {defaults: []}, {urls: 'https://example.com'}, {urls: [null]}, {urls: ['']}]) {
+		await assert.rejects(loadConfig({config}), /config/);
+	}
 });

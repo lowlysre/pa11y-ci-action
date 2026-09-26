@@ -1,7 +1,45 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {pathToFileURL} from 'node:url';
 
 const DEFAULT_CONFIG_NAMES = ['.pa11yci', '.pa11yci.json', '.pa11yci.js', '.pa11yci.cjs'];
+
+export async function loadConfig({configPath, config}) {
+	if (configPath) {
+		config = /\.(cjs|mjs|js)$/.test(configPath) ?
+			await (await import(pathToFileURL(configPath).href)).default :
+			JSON.parse(fs.readFileSync(configPath, 'utf8'));
+	}
+	if (!config || typeof config !== 'object' || Array.isArray(config)) {
+		throw new Error('pa11y-ci config must export an object');
+	}
+	const defaults = config.defaults ?? {};
+	if (typeof defaults !== 'object' || Array.isArray(defaults)) {
+		throw new Error('pa11y-ci config defaults must be an object');
+	}
+	const urls = config.urls ?? [];
+	if (!Array.isArray(urls)) {
+		throw new Error('pa11y-ci config urls must be an array');
+	}
+	const seen = new Set();
+	for (const entry of urls) {
+		const url = typeof entry === 'string' ? entry : entry?.url;
+		if (typeof url !== 'string' || !url.trim()) {
+			throw new Error('each pa11y-ci config URL must be a non-empty string or an object with a url');
+		}
+		if (seen.has(url)) {
+			throw new Error(`duplicate URL "${url}": use separate action steps for different scenarios of the same URL`);
+		}
+		seen.add(url);
+	}
+	for (const options of [config, defaults, ...urls.filter(url => typeof url === 'object')]) {
+		if (options.threshold !== undefined && options.threshold !== 0) {
+			throw new Error('config thresholds can hide issues; remove them and use the action threshold input');
+		}
+	}
+	// The CLI owns stdout; caller reporters must not add a second report.
+	return {...config, defaults: {...defaults, reporters: []}, urls};
+}
 
 /**
  * Find an existing pa11y-ci config file. Returns the path to use with `-c`,

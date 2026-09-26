@@ -1,18 +1,17 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
 import * as exec from '@actions/exec';
 
 /**
  * Resolve the installed `pa11y-ci` CLI binary. Invoked as a separate
  * process rather than imported as a library, so this stays a clean
- * process boundary against pa11y-ci's LGPL-3.0 license. `require` here
- * comes from the `createRequire` banner esbuild injects at bundle time
- * (see the `build` script in package.json), needed because `pa11y-ci`'s
- * own entrypoint is CommonJS.
+ * process boundary against pa11y-ci's LGPL-3.0 license.
  */
 export function resolveBinPath() {
-	return require.resolve('pa11y-ci/bin/pa11y-ci.js');
+	return process.env.PA11Y_CI_BIN || createRequire(import.meta.url).resolve('pa11y-ci/bin/pa11y-ci.js');
 }
 
 const MAX_ERROR_OUTPUT = 4000;
@@ -32,26 +31,29 @@ function tail(text) {
  * since the job summary replaces it; errors include a bounded excerpt.
  */
 export async function runPa11yCi({cwd, configPath, config, sitemap}, {getExecOutput = exec.getExecOutput, binPath = resolveBinPath()} = {}) {
-	const args = [binPath, '--json', '--config', configPath ?? writeSyntheticConfig(config)];
+	const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'pa11y-ci-action-'));
+	const loader = fileURLToPath(new URL('./config-loader.cjs', import.meta.url));
+	const preparedConfig = path.join(tempDirectory, 'config.cjs');
+	fs.writeFileSync(preparedConfig,
+		`module.exports = require(${JSON.stringify(loader)}).loadConfig(${JSON.stringify({configPath, config})});\n`);
+	const args = [binPath, '--json', '--config', preparedConfig];
 	if (sitemap) {
 		args.push('--sitemap', sitemap);
 	}
 
-	const {exitCode, stdout, stderr} = await getExecOutput(`"${process.execPath}"`, args, {cwd, ignoreReturnCode: true, silent: true});
-
-	if (exitCode !== 0 && exitCode !== 2) {
-		throw new Error(`pa11y-ci exited with code ${exitCode}:\n${tail(stderr || stdout)}`);
-	}
-
 	try {
-		return JSON.parse(stdout);
-	} catch (error) {
-		throw new Error(`could not parse pa11y-ci JSON output: ${error.message}\n${tail(stderr || stdout)}`);
-	}
-}
+		const {exitCode, stdout, stderr} = await getExecOutput(`"${process.execPath}"`, args, {cwd, ignoreReturnCode: true, silent: true});
 
-function writeSyntheticConfig(config) {
-	const configPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pa11y-ci-action-')), 'config.json');
-	fs.writeFileSync(configPath, JSON.stringify(config));
-	return configPath;
+		if (exitCode !== 0 && exitCode !== 2) {
+			throw new Error(`pa11y-ci exited with code ${exitCode}:\n${tail(stderr || stdout)}`);
+		}
+
+		try {
+			return JSON.parse(stdout);
+		} catch (error) {
+			throw new Error(`could not parse pa11y-ci JSON output: ${error.message}\n${tail(stderr || stdout)}`);
+		}
+	} finally {
+		fs.rmSync(tempDirectory, {recursive: true, force: true});
+	}
 }

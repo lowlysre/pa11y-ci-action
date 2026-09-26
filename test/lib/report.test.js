@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {summarize, buildMarkdown, failureMessage, escapeMarkdownCell, COMMENT_MAX_BYTES} from '../../src/lib/report.js';
+import {summarize, buildMarkdown, failureMessage, escapeMarkdownCell, commentMarker, COMMENT_MAX_BYTES} from '../../src/lib/report.js';
 
 function issue(type) {
 	return {code: 'WCAG2AA.Test', type, message: `a ${type}`, context: '<div>', selector: 'div'};
@@ -198,4 +198,32 @@ test('buildMarkdown fits exactly at the boundary without an omission note', () =
 	assert.equal(buildMarkdown(summary, {maxBytes: size}), full);
 	assert.match(buildMarkdown(summary, {maxBytes: size - 1}), /more URL\(s\) not shown/);
 	assert.ok(Buffer.byteLength(buildMarkdown(summary, {maxBytes: size - 1})) <= size - 1);
+});
+
+test('summarize rejects empty and incomplete scans instead of returning a pass', () => {
+	assert.throws(() => summarize({total: 0, results: {}}, 0), /tested no URLs/);
+	assert.throws(() => summarize({total: 2, errors: 3, results: {'https://example.com': []}}, 0), /incomplete/);
+});
+
+test('summarize rejects incompatible report shapes', () => {
+	for (const report of [null, {}, {total: -1, results: {}}, {total: 1, results: []},
+		{total: 1, results: {url: null}}, {total: 1, results: {url: [null]}},
+		{total: 1, results: {url: [{type: 'unknown'}]}}]) {
+		assert.throws(() => summarize(report, 0), /invalid/);
+	}
+});
+
+test('comment markers are stable, scoped, and safe for arbitrary identifiers', () => {
+	assert.equal(commentMarker('site-a'), commentMarker('site-a'));
+	assert.notEqual(commentMarker('site-a'), commentMarker('site-b'));
+	assert.match(commentMarker('--> @someone\n'), /^<!-- pa11y-ci-action-summary:[a-f0-9]{64} -->$/);
+});
+
+test('buildMarkdown includes a scoped marker and workflow link within its byte limit', () => {
+	const markdown = buildMarkdown(bigSummary(2000), {
+		marker: commentMarker('site-a'), runUrl: 'https://github.com/o/r/actions/runs/123', maxBytes: COMMENT_MAX_BYTES
+	});
+	assert.ok(markdown.startsWith(commentMarker('site-a')));
+	assert.match(markdown, /\[View workflow run\]\(https:\/\/github.com\/o\/r\/actions\/runs\/123\)/);
+	assert.ok(Buffer.byteLength(markdown) <= COMMENT_MAX_BYTES);
 });
