@@ -26,8 +26,11 @@ export function findConfigPath(configInput, workingDirectory) {
 
 /**
  * Build a pa11y-ci config object from action inputs, for use when the
- * repo has no config file of its own. `urls`/`sitemap` are mutually
- * additive: pa11y-ci will crawl the sitemap and test the listed URLs.
+ * repo has no config file of its own. The sitemap isn't part of the
+ * returned config: pa11y-ci only reads it from the `--sitemap` flag.
+ *
+ * Chromium's sandbox is off because ubuntu-latest's AppArmor policy
+ * blocks it; this matches pa11y-ci's own guidance for CI.
  */
 export function buildSyntheticConfig({urls, sitemap, standard, concurrency}) {
 	if (!urls.length && !sitemap) {
@@ -36,7 +39,10 @@ export function buildSyntheticConfig({urls, sitemap, standard, concurrency}) {
 	return {
 		defaults: {
 			standard,
-			concurrency
+			concurrency,
+			chromeLaunchConfig: {
+				args: ['--no-sandbox']
+			}
 		},
 		urls
 	};

@@ -14,21 +14,19 @@ async function run() {
 	const commentOnPr = core.getBooleanInput('comment-on-pr');
 
 	const configPath = findConfigPath(core.getInput('config'), workingDirectory);
+	const sitemap = configPath ? undefined : core.getInput('sitemap') || undefined;
 	const syntheticConfig = configPath ? null : buildSyntheticConfig({
 		urls: parseUrlsInput(core.getInput('urls')),
-		sitemap: core.getInput('sitemap') || undefined,
+		sitemap,
 		standard: core.getInput('standard') || 'WCAG2AA',
 		concurrency: parseInt(core.getInput('concurrency') || '1', 10)
 	});
-	if (syntheticConfig && core.getInput('sitemap')) {
-		syntheticConfig.sitemap = core.getInput('sitemap');
-	}
 
 	core.info(configPath ?
 		`using pa11y-ci config at ${configPath}` :
 		'no pa11y-ci config found, using urls/sitemap/standard/concurrency inputs');
 
-	const report = await runPa11yCi({cwd: workingDirectory, configPath, config: syntheticConfig, threshold});
+	const report = await runPa11yCi({cwd: workingDirectory, configPath, config: syntheticConfig, sitemap, threshold});
 	const summary = summarize(report, threshold);
 	const markdown = buildMarkdown(summary);
 

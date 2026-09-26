@@ -22,12 +22,15 @@ export function resolveBinPath() {
  * call never throws on a failing accessibility run, only on pa11y-ci
  * itself crashing (bad config, no browser, etc).
  */
-export async function runPa11yCi({cwd, configPath, config, threshold}) {
+export async function runPa11yCi({cwd, configPath, config, sitemap, threshold}) {
 	const args = ['--json', '--threshold', String(threshold)];
 	if (configPath) {
 		args.push('--config', configPath);
 	} else {
 		args.push('--config', writeSyntheticConfig(cwd, config));
+	}
+	if (sitemap) {
+		args.push('--sitemap', sitemap);
 	}
 
 	let stdout = '';

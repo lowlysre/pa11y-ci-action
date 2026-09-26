@@ -28,8 +28,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Lets Chromium's sandbox run on ubuntu-latest; see "Known gaps" below.
-      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: lowlysre/pa11y-ci-action@acce551b1e4a119f2d7c03e8b16a5d4c7e91f0a3 # v1.0.0
         with:
           urls: |
@@ -46,6 +44,18 @@ On a page with issues, the job fails and the run's job summary lists the URL, an
 ### Use an existing `.pa11yci` config
 
 If a `.pa11yci`, `.pa11yci.json`, `.pa11yci.js`, or `.pa11yci.cjs` file exists in `working-directory`, the action uses it as-is via pa11y-ci's own `--config` flag. The `urls`, `sitemap`, `standard`, and `concurrency` inputs are only used to synthesize a config when none of those files exist, so set them directly in your `.pa11yci` file instead.
+
+On `ubuntu-latest`, your config needs Chromium's sandbox turned off, or Chromium fails with `No usable sandbox!`:
+
+```json
+{
+  "defaults": {
+    "chromeLaunchConfig": {
+      "args": ["--no-sandbox"]
+    }
+  }
+}
+```
 
 ### Tune the failure threshold
 
@@ -85,7 +95,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: lowlysre/pa11y-ci-action@acce551b1e4a119f2d7c03e8b16a5d4c7e91f0a3 # v1.0.0
         with:
           urls: https://example.com
@@ -141,11 +150,7 @@ You can, and plenty of repos do. This wraps that in one `uses:` line with a pinn
 ### Known gaps
 
 - The Chromium cache is keyed on the literal `pa11y-ci-version` string. With a range like `^4.0.0`, a newer pa11y-ci that needs a newer Chromium downloads it every run until the range string changes. Pin an exact version to avoid that.
-- On `ubuntu-latest` runners (Ubuntu 24.04+), Chromium's sandbox fails with `No usable sandbox!` because of an [AppArmor restriction on unprivileged user namespaces](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md). This is a runner/Chromium interaction outside this action's control, and it affects `npx pa11y-ci` and any other puppeteer-based action the same way. Add this step before this action in your workflow:
-
-  ```yaml
-        - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-  ```
+- The config the action builds from inputs runs Chromium with `--no-sandbox`, because `ubuntu-latest`'s [AppArmor policy](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md) blocks its sandbox. Only point the action at sites you trust.
 
 ## Acknowledgements
 

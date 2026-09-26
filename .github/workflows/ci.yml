@@ -46,11 +46,6 @@ jobs:
     needs: build-check
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # ubuntu-latest's AppArmor policy blocks Chromium's unprivileged user
-      # namespace sandbox (https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
-      # This relaxes it for this ephemeral runner only; see the README's
-      # "Known gaps" section for the same workaround as a consumer.
-      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - id: passing
         uses: ./
         with:
@@ -78,6 +73,18 @@ jobs:
             echo "expected the failing fixture to report issues" >&2
             exit 1
           fi
+      - name: Serve fixtures for the sitemap test
+        run: python3 -m http.server 8080 --directory test/fixtures &
+      - id: sitemap
+        uses: ./
+        with:
+          sitemap: http://127.0.0.1:8080/sitemap.xml
+      - name: Assert the sitemap URLs were tested
+        run: |
+          if [ "${{ steps.sitemap.outputs.total-urls }}" != "1" ]; then
+            echo "expected 1 URL from the sitemap, got '${{ steps.sitemap.outputs.total-urls }}'" >&2
+            exit 1
+          fi
 
   e2e-cache:
     runs-on: ubuntu-latest
@@ -85,7 +92,6 @@ jobs:
     needs: e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - id: cached
         uses: ./
         with:

@@ -25246,7 +25246,10 @@ function buildSyntheticConfig({ urls, sitemap, standard, concurrency }) {
   return {
     defaults: {
       standard,
-      concurrency
+      concurrency,
+      chromeLaunchConfig: {
+        args: ["--no-sandbox"]
+      }
     },
     urls
   };
@@ -25262,12 +25265,15 @@ import path5 from "node:path";
 function resolveBinPath() {
   return __require.resolve("pa11y-ci/bin/pa11y-ci.js");
 }
-async function runPa11yCi({ cwd, configPath, config, threshold }) {
+async function runPa11yCi({ cwd, configPath, config, sitemap, threshold }) {
   const args = ["--json", "--threshold", String(threshold)];
   if (configPath) {
     args.push("--config", configPath);
   } else {
     args.push("--config", writeSyntheticConfig(cwd, config));
+  }
+  if (sitemap) {
+    args.push("--sitemap", sitemap);
   }
   let stdout = "";
   let stderr = "";
@@ -25372,17 +25378,15 @@ async function run() {
   const threshold = parseInt(getInput("threshold") || "0", 10);
   const commentOnPr = getBooleanInput("comment-on-pr");
   const configPath = findConfigPath(getInput("config"), workingDirectory);
+  const sitemap = configPath ? void 0 : getInput("sitemap") || void 0;
   const syntheticConfig = configPath ? null : buildSyntheticConfig({
     urls: parseUrlsInput(getInput("urls")),
-    sitemap: getInput("sitemap") || void 0,
+    sitemap,
     standard: getInput("standard") || "WCAG2AA",
     concurrency: parseInt(getInput("concurrency") || "1", 10)
   });
-  if (syntheticConfig && getInput("sitemap")) {
-    syntheticConfig.sitemap = getInput("sitemap");
-  }
   info(configPath ? `using pa11y-ci config at ${configPath}` : "no pa11y-ci config found, using urls/sitemap/standard/concurrency inputs");
-  const report = await runPa11yCi({ cwd: workingDirectory, configPath, config: syntheticConfig, threshold });
+  const report = await runPa11yCi({ cwd: workingDirectory, configPath, config: syntheticConfig, sitemap, threshold });
   const summary2 = summarize(report, threshold);
   const markdown = buildMarkdown(summary2);
   const reportPath = path6.join(fs5.mkdtempSync(path6.join(os7.tmpdir(), "pa11y-ci-action-report-")), "report.json");

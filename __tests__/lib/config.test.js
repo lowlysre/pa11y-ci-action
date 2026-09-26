@@ -37,9 +37,16 @@ test('buildSyntheticConfig builds a config from urls', () => {
 	const config = buildSyntheticConfig({urls: ['https://example.com'], sitemap: undefined, standard: 'WCAG2AA', concurrency: 1});
 
 	assert.deepEqual(config, {
-		defaults: {standard: 'WCAG2AA', concurrency: 1},
+		defaults: {standard: 'WCAG2AA', concurrency: 1, chromeLaunchConfig: {args: ['--no-sandbox']}},
 		urls: ['https://example.com']
 	});
+});
+
+test('buildSyntheticConfig leaves the sitemap out of the config', () => {
+	const config = buildSyntheticConfig({urls: [], sitemap: 'https://example.com/sitemap.xml', standard: 'WCAG2AA', concurrency: 1});
+
+	assert.equal(config.sitemap, undefined);
+	assert.deepEqual(config.urls, []);
 });
 
 test('buildSyntheticConfig throws when there are no urls or sitemap', () => {
