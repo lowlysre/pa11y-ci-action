@@ -42,30 +42,28 @@ async function run() {
 	await core.summary.addRaw(buildMarkdown(summary, {maxBytes: SUMMARY_MAX_BYTES})).write();
 
 	if (commentOnPr) {
-		const pullRequest = github.context.payload.pull_request;
-		if (!pullRequest) {
-			core.warning('comment-on-pr is true, but this run was not triggered by a pull_request event; skipping comment');
-		} else {
-			const octokit = github.getOctokit(core.getInput('github-token'));
-			try {
-				await upsertComment(octokit, {
-					owner: github.context.repo.owner,
-					repo: github.context.repo.repo,
-					issueNumber: pullRequest.number,
-					body: buildMarkdown(summary, {maxBytes: COMMENT_MAX_BYTES})
-				});
-			} catch (error) {
-				const warning = permissionWarning(error);
-				if (!warning) {
-					throw error;
-				}
-				core.warning(warning);
-			}
-		}
+		await commentOnPullRequest(buildMarkdown(summary, {maxBytes: COMMENT_MAX_BYTES}));
 	}
 
 	if (!summary.passed) {
 		core.setFailed(failureMessage(summary, threshold));
+	}
+}
+
+async function commentOnPullRequest(body) {
+	if (!github.context.payload.pull_request) {
+		core.warning('comment-on-pr is true, but this run was not triggered by a pull_request event; skipping comment');
+		return;
+	}
+	const {owner, repo, number} = github.context.issue;
+	try {
+		await upsertComment(github.getOctokit(core.getInput('github-token')), {owner, repo, issueNumber: number, body});
+	} catch (error) {
+		const warning = permissionWarning(error);
+		if (!warning) {
+			throw error;
+		}
+		core.warning(warning);
 	}
 }
 

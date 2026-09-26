@@ -14947,7 +14947,7 @@ var require_util4 = __commonJS({
     var { getEncoding } = require_encoding();
     var { serializeAMimeType, parseMIMEType } = require_data_url();
     var { types } = __require("node:util");
-    var { StringDecoder } = __require("string_decoder");
+    var { StringDecoder: StringDecoder2 } = __require("string_decoder");
     var { btoa } = __require("node:buffer");
     var staticPropertyDescriptors = {
       enumerable: true,
@@ -15038,7 +15038,7 @@ var require_util4 = __commonJS({
             dataURL += serializeAMimeType(parsed);
           }
           dataURL += ";base64,";
-          const decoder = new StringDecoder("latin1");
+          const decoder = new StringDecoder2("latin1");
           for (const chunk of bytes) {
             dataURL += btoa(decoder.write(chunk));
           }
@@ -15067,7 +15067,7 @@ var require_util4 = __commonJS({
         }
         case "BinaryString": {
           let binaryString = "";
-          const decoder = new StringDecoder("latin1");
+          const decoder = new StringDecoder2("latin1");
           for (const chunk of bytes) {
             binaryString += decoder.write(chunk);
           }
@@ -20286,6 +20286,9 @@ var summary = _summary;
 // node_modules/@actions/core/lib/platform.js
 import os4 from "os";
 
+// node_modules/@actions/exec/lib/exec.js
+import { StringDecoder } from "string_decoder";
+
 // node_modules/@actions/exec/lib/toolrunner.js
 import * as os3 from "os";
 import * as events from "events";
@@ -20998,6 +21001,38 @@ function exec(commandLine, args, options) {
     args = commandArgs.slice(1).concat(args || []);
     const runner = new ToolRunner(toolPath, args, options);
     return runner.exec();
+  });
+}
+function getExecOutput(commandLine, args, options) {
+  return __awaiter5(this, void 0, void 0, function* () {
+    var _a, _b;
+    let stdout = "";
+    let stderr = "";
+    const stdoutDecoder = new StringDecoder("utf8");
+    const stderrDecoder = new StringDecoder("utf8");
+    const originalStdoutListener = (_a = options === null || options === void 0 ? void 0 : options.listeners) === null || _a === void 0 ? void 0 : _a.stdout;
+    const originalStdErrListener = (_b = options === null || options === void 0 ? void 0 : options.listeners) === null || _b === void 0 ? void 0 : _b.stderr;
+    const stdErrListener = (data) => {
+      stderr += stderrDecoder.write(data);
+      if (originalStdErrListener) {
+        originalStdErrListener(data);
+      }
+    };
+    const stdOutListener = (data) => {
+      stdout += stdoutDecoder.write(data);
+      if (originalStdoutListener) {
+        originalStdoutListener(data);
+      }
+    };
+    const listeners = Object.assign(Object.assign({}, options === null || options === void 0 ? void 0 : options.listeners), { stdout: stdOutListener, stderr: stdErrListener });
+    const exitCode = yield exec(commandLine, args, Object.assign(Object.assign({}, options), { listeners }));
+    stdout += stdoutDecoder.end();
+    stderr += stderrDecoder.end();
+    return {
+      exitCode,
+      stdout,
+      stderr
+    };
   });
 }
 
@@ -25255,7 +25290,7 @@ function buildSyntheticConfig({ urls, sitemap, standard, concurrency }) {
   };
 }
 function parseIntegerInput(name, value, { min }) {
-  const trimmed = String(value).trim();
+  const trimmed = value.trim();
   const parsed = /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
   if (!Number.isSafeInteger(parsed) || parsed < min) {
     throw new Error(`\`${name}\` must be a whole number of at least ${min}, got "${value}"`);
@@ -25277,31 +25312,12 @@ var MAX_ERROR_OUTPUT = 4e3;
 function tail(text) {
   return text.length > MAX_ERROR_OUTPUT ? `\u2026${text.slice(-MAX_ERROR_OUTPUT)}` : text;
 }
-async function runPa11yCi({ cwd, configPath, config, sitemap }, { execFn = exec, binPath } = {}) {
-  const args = ["--json"];
-  if (configPath) {
-    args.push("--config", configPath);
-  } else {
-    args.push("--config", writeSyntheticConfig(cwd, config));
-  }
+async function runPa11yCi({ cwd, configPath, config, sitemap }, { getExecOutput: getExecOutput2 = getExecOutput, binPath = resolveBinPath() } = {}) {
+  const args = [binPath, "--json", "--config", configPath ?? writeSyntheticConfig(config)];
   if (sitemap) {
     args.push("--sitemap", sitemap);
   }
-  let stdout = "";
-  let stderr = "";
-  const exitCode = await execFn(`"${process.execPath}"`, [binPath ?? resolveBinPath(), ...args], {
-    cwd,
-    ignoreReturnCode: true,
-    silent: true,
-    listeners: {
-      stdout: (data) => {
-        stdout += data.toString();
-      },
-      stderr: (data) => {
-        stderr += data.toString();
-      }
-    }
-  });
+  const { exitCode, stdout, stderr } = await getExecOutput2(`"${process.execPath}"`, args, { cwd, ignoreReturnCode: true, silent: true });
   if (exitCode !== 0 && exitCode !== 2) {
     throw new Error(`pa11y-ci exited with code ${exitCode}:
 ${tail(stderr || stdout)}`);
@@ -25313,7 +25329,7 @@ ${tail(stderr || stdout)}`);
 ${tail(stderr || stdout)}`);
   }
 }
-function writeSyntheticConfig(cwd, config) {
+function writeSyntheticConfig(config) {
   const configPath = path5.join(fs4.mkdtempSync(path5.join(os6.tmpdir(), "pa11y-ci-action-")), "config.json");
   fs4.writeFileSync(configPath, JSON.stringify(config));
   return configPath;
@@ -25321,14 +25337,16 @@ function writeSyntheticConfig(cwd, config) {
 
 // src/lib/report.js
 var MARKER = "<!-- pa11y-ci-action-summary -->";
+var COMMENT_MAX_BYTES = 65536;
+var SUMMARY_MAX_BYTES = 1024 * 1024;
 function summarize(report, threshold) {
   const urls = Object.entries(report.results).map(([url, issues]) => {
     if (issues.length === 1 && issues[0].message && !issues[0].code) {
-      return { url, crashed: true, message: issues[0].message, counts: { error: 0, warning: 0, notice: 0 } };
+      return { url, crashed: true, message: issues[0].message };
     }
     const counts = { error: 0, warning: 0, notice: 0 };
-    for (const issue2 of issues) {
-      counts[issue2.type] = (counts[issue2.type] || 0) + 1;
+    for (const { type } of issues) {
+      counts[type] = (counts[type] ?? 0) + 1;
     }
     return { url, crashed: false, issues: issues.length, counts };
   });
@@ -25354,19 +25372,15 @@ function failureMessage(summary2, threshold) {
   }
   return reasons.length > 0 ? `pa11y-ci ${reasons.join(" and ")}` : null;
 }
-var COMMENT_MAX_BYTES = 65536;
-var SUMMARY_MAX_BYTES = 1024 * 1024;
 function escapeMarkdownCell(text) {
   return String(text).replace(/\r\n|\r|\n/g, " ").replace(/&/g, "&amp;").replace(/[\\`*_[\]<>|~]/g, "\\$&").replace(/@/g, "@\u200B");
 }
-function truncate(text, maxLength) {
-  const value = String(text);
-  return value.length > maxLength ? `${value.slice(0, maxLength)}\u2026` : value;
-}
+var MAX_ERROR_MESSAGE = 500;
 function row(url) {
   const name = escapeMarkdownCell(url.url);
   if (url.crashed) {
-    return `| ${name} | :warning: failed to load: ${escapeMarkdownCell(truncate(url.message, 500))} | | |`;
+    const message = url.message.length > MAX_ERROR_MESSAGE ? `${url.message.slice(0, MAX_ERROR_MESSAGE)}\u2026` : url.message;
+    return `| ${name} | :warning: failed to load: ${escapeMarkdownCell(message)} | | |`;
   }
   return `| ${name} | ${url.counts.error} | ${url.counts.warning} | ${url.counts.notice} |`;
 }
@@ -25384,39 +25398,27 @@ _${count} more URL(s) not shown to stay within GitHub's size limit. See the \`re
 function buildMarkdown(summary2, { maxBytes = Number.POSITIVE_INFINITY } = {}) {
   const header = [
     MARKER,
-    `### pa11y-ci results`,
+    "### pa11y-ci results",
     "",
     `${summary2.passed ? ":white_check_mark:" : ":x:"} **${summary2.passedUrls}/${summary2.totalUrls}** URLs passed, **${summary2.totalIssues}** issue(s) found`,
     "",
     "| URL | Errors | Warnings | Notices |",
     "| --- | --- | --- | --- |"
   ].join("\n");
-  const rows = summary2.urls.map((url, index) => ({ url, index })).sort((a, b) => rank(a.url) - rank(b.url) || a.index - b.index).map(({ url }) => row(url));
+  const rows = summary2.urls.toSorted((a, b) => rank(a) - rank(b)).map(row);
   const full = [header, ...rows].join("\n");
   if (Buffer.byteLength(full) <= maxBytes) {
     return full;
   }
   const budget = maxBytes - Buffer.byteLength(omittedNote(rows.length));
-  let body = header;
-  let bytes = Buffer.byteLength(body);
-  let shown = 0;
-  for (const line of rows) {
-    const lineBytes = Buffer.byteLength(line) + 1;
-    if (bytes + lineBytes > budget) {
-      break;
-    }
-    body += `
-${line}`;
-    bytes += lineBytes;
-    shown++;
-  }
-  return body + omittedNote(rows.length - shown);
+  let bytes = Buffer.byteLength(header);
+  const shown = rows.findIndex((line) => (bytes += Buffer.byteLength(line) + 1) > budget);
+  return [header, ...rows.slice(0, shown)].join("\n") + omittedNote(rows.length - shown);
 }
 
 // src/lib/comment.js
 function isRateLimited(error2) {
-  const remaining = error2?.response?.headers?.["x-ratelimit-remaining"];
-  return remaining === "0" || remaining === 0 || /rate limit/i.test(error2?.message ?? "");
+  return error2?.response?.headers?.["x-ratelimit-remaining"] === "0" || /rate limit/i.test(error2?.message ?? "");
 }
 function permissionWarning(error2) {
   if (error2?.status !== 403 || isRateLimited(error2)) {
@@ -25426,45 +25428,25 @@ function permissionWarning(error2) {
   return `Skipped the PR comment: GitHub returned 403${detail}. The token most likely lacks \`pull-requests: write\`. Add it to the job's \`permissions\`. Pull requests from forks get a read-only token and can't be commented on.`;
 }
 async function resolveTokenLogin(octokit) {
-  try {
-    const { data } = await octokit.rest.users.getAuthenticated();
-    if (data?.login) {
-      return data.login;
-    }
-  } catch {
+  const restLogin = await octokit.rest.users.getAuthenticated().then(({ data }) => data.login, () => null);
+  if (restLogin) {
+    return restLogin;
   }
-  try {
-    const { viewer } = await octokit.graphql("query { viewer { login } }");
-    if (viewer?.login) {
-      return viewer.login.endsWith("[bot]") ? viewer.login : `${viewer.login}[bot]`;
-    }
-  } catch {
+  const appLogin = await octokit.graphql("query { viewer { login } }").then(({ viewer }) => viewer.login, () => null);
+  if (appLogin) {
+    return appLogin.endsWith("[bot]") ? appLogin : `${appLogin}[bot]`;
   }
   return "github-actions[bot]";
 }
 async function upsertComment(octokit, { owner, repo, issueNumber, body }) {
   const login = await resolveTokenLogin(octokit);
-  const comments = await octokit.paginate(octokit.rest.issues.listComments, {
-    owner,
-    repo,
-    issue_number: issueNumber
-  });
+  const comments = await octokit.paginate(octokit.rest.issues.listComments, { owner, repo, issue_number: issueNumber });
   const existing = comments.find((comment) => comment.body?.includes(MARKER) && comment.user?.login === login);
   if (existing) {
-    await octokit.rest.issues.updateComment({
-      owner,
-      repo,
-      comment_id: existing.id,
-      body
-    });
-    return;
+    await octokit.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+  } else {
+    await octokit.rest.issues.createComment({ owner, repo, issue_number: issueNumber, body });
   }
-  await octokit.rest.issues.createComment({
-    owner,
-    repo,
-    issue_number: issueNumber,
-    body
-  });
 }
 
 // src/index.js
@@ -25493,29 +25475,26 @@ async function run() {
   setOutput("report-json", reportPath);
   await summary.addRaw(buildMarkdown(summary2, { maxBytes: SUMMARY_MAX_BYTES })).write();
   if (commentOnPr) {
-    const pullRequest = context2.payload.pull_request;
-    if (!pullRequest) {
-      warning("comment-on-pr is true, but this run was not triggered by a pull_request event; skipping comment");
-    } else {
-      const octokit = getOctokit(getInput("github-token"));
-      try {
-        await upsertComment(octokit, {
-          owner: context2.repo.owner,
-          repo: context2.repo.repo,
-          issueNumber: pullRequest.number,
-          body: buildMarkdown(summary2, { maxBytes: COMMENT_MAX_BYTES })
-        });
-      } catch (error2) {
-        const warning2 = permissionWarning(error2);
-        if (!warning2) {
-          throw error2;
-        }
-        warning(warning2);
-      }
-    }
+    await commentOnPullRequest(buildMarkdown(summary2, { maxBytes: COMMENT_MAX_BYTES }));
   }
   if (!summary2.passed) {
     setFailed(failureMessage(summary2, threshold));
+  }
+}
+async function commentOnPullRequest(body) {
+  if (!context2.payload.pull_request) {
+    warning("comment-on-pr is true, but this run was not triggered by a pull_request event; skipping comment");
+    return;
+  }
+  const { owner, repo, number } = context2.issue;
+  try {
+    await upsertComment(getOctokit(getInput("github-token")), { owner, repo, issueNumber: number, body });
+  } catch (error2) {
+    const warning2 = permissionWarning(error2);
+    if (!warning2) {
+      throw error2;
+    }
+    warning(warning2);
   }
 }
 run().catch((error2) => {

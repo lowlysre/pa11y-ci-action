@@ -31,32 +31,13 @@ function tail(text) {
  * report, so `--threshold` isn't passed. Output isn't echoed to the log,
  * since the job summary replaces it; errors include a bounded excerpt.
  */
-export async function runPa11yCi({cwd, configPath, config, sitemap}, {execFn = exec.exec, binPath} = {}) {
-	const args = ['--json'];
-	if (configPath) {
-		args.push('--config', configPath);
-	} else {
-		args.push('--config', writeSyntheticConfig(cwd, config));
-	}
+export async function runPa11yCi({cwd, configPath, config, sitemap}, {getExecOutput = exec.getExecOutput, binPath = resolveBinPath()} = {}) {
+	const args = [binPath, '--json', '--config', configPath ?? writeSyntheticConfig(config)];
 	if (sitemap) {
 		args.push('--sitemap', sitemap);
 	}
 
-	let stdout = '';
-	let stderr = '';
-	const exitCode = await execFn(`"${process.execPath}"`, [binPath ?? resolveBinPath(), ...args], {
-		cwd,
-		ignoreReturnCode: true,
-		silent: true,
-		listeners: {
-			stdout: data => {
-				stdout += data.toString();
-			},
-			stderr: data => {
-				stderr += data.toString();
-			}
-		}
-	});
+	const {exitCode, stdout, stderr} = await getExecOutput(`"${process.execPath}"`, args, {cwd, ignoreReturnCode: true, silent: true});
 
 	if (exitCode !== 0 && exitCode !== 2) {
 		throw new Error(`pa11y-ci exited with code ${exitCode}:\n${tail(stderr || stdout)}`);
@@ -69,7 +50,7 @@ export async function runPa11yCi({cwd, configPath, config, sitemap}, {execFn = e
 	}
 }
 
-function writeSyntheticConfig(cwd, config) {
+function writeSyntheticConfig(config) {
 	const configPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'pa11y-ci-action-')), 'config.json');
 	fs.writeFileSync(configPath, JSON.stringify(config));
 	return configPath;

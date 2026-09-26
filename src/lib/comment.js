@@ -1,8 +1,7 @@
 import {MARKER} from './report.js';
 
 function isRateLimited(error) {
-	const remaining = error?.response?.headers?.['x-ratelimit-remaining'];
-	return remaining === '0' || remaining === 0 || /rate limit/i.test(error?.message ?? '');
+	return error?.response?.headers?.['x-ratelimit-remaining'] === '0' || /rate limit/i.test(error?.message ?? '');
 }
 
 /**
@@ -17,8 +16,7 @@ export function permissionWarning(error) {
 	}
 	const detail = error.message ? ` (GitHub said: ${error.message})` : '';
 	return `Skipped the PR comment: GitHub returned 403${detail}. The token most likely lacks \`pull-requests: write\`. `
-		+ 'Add it to the job\'s `permissions`. '
-		+ 'Pull requests from forks get a read-only token and can\'t be commented on.';
+		+ 'Add it to the job\'s `permissions`. Pull requests from forks get a read-only token and can\'t be commented on.';
 }
 
 /**
@@ -29,18 +27,14 @@ export function permissionWarning(error) {
  * REST login carries a `[bot]` suffix GraphQL may leave off.
  */
 export async function resolveTokenLogin(octokit) {
-	try {
-		const {data} = await octokit.rest.users.getAuthenticated();
-		if (data?.login) {
-			return data.login;
-		}
-	} catch {}
-	try {
-		const {viewer} = await octokit.graphql('query { viewer { login } }');
-		if (viewer?.login) {
-			return viewer.login.endsWith('[bot]') ? viewer.login : `${viewer.login}[bot]`;
-		}
-	} catch {}
+	const restLogin = await octokit.rest.users.getAuthenticated().then(({data}) => data.login, () => null);
+	if (restLogin) {
+		return restLogin;
+	}
+	const appLogin = await octokit.graphql('query { viewer { login } }').then(({viewer}) => viewer.login, () => null);
+	if (appLogin) {
+		return appLogin.endsWith('[bot]') ? appLogin : `${appLogin}[bot]`;
+	}
 	return 'github-actions[bot]';
 }
 
@@ -52,27 +46,12 @@ export async function resolveTokenLogin(octokit) {
  */
 export async function upsertComment(octokit, {owner, repo, issueNumber, body}) {
 	const login = await resolveTokenLogin(octokit);
-	const comments = await octokit.paginate(octokit.rest.issues.listComments, {
-		owner,
-		repo,
-		issue_number: issueNumber
-	});
+	const comments = await octokit.paginate(octokit.rest.issues.listComments, {owner, repo, issue_number: issueNumber});
 	const existing = comments.find(comment => comment.body?.includes(MARKER) && comment.user?.login === login);
 
 	if (existing) {
-		await octokit.rest.issues.updateComment({
-			owner,
-			repo,
-			comment_id: existing.id,
-			body
-		});
-		return;
+		await octokit.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});
+	} else {
+		await octokit.rest.issues.createComment({owner, repo, issue_number: issueNumber, body});
 	}
-
-	await octokit.rest.issues.createComment({
-		owner,
-		repo,
-		issue_number: issueNumber,
-		body
-	});
 }

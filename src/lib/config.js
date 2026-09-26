@@ -53,7 +53,7 @@ export function buildSyntheticConfig({urls, sitemap, standard, concurrency}) {
  * quietly accept (`2x`, `1.5`, blanks) or that falls below `min`.
  */
 export function parseIntegerInput(name, value, {min}) {
-	const trimmed = String(value).trim();
+	const trimmed = value.trim();
 	const parsed = /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
 	if (!Number.isSafeInteger(parsed) || parsed < min) {
 		throw new Error(`\`${name}\` must be a whole number of at least ${min}, got "${value}"`);
