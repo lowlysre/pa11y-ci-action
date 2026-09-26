@@ -78,9 +78,11 @@ runs:
       with:
         path: ${{ runner.temp }}/pa11y-ci-action/puppeteer
         key: pa11y-ci-action-chromium-${{ runner.os }}-${{ runner.arch }}-${{ inputs.pa11y-ci-version }}
+    # pa11y-ci is installed at run time, not locked, so callers can pick any
+    # version via `pa11y-ci-version`; see the README's Design section.
     - name: Install pa11y-ci
       shell: bash
-      run: npm install --no-save --no-audit --no-fund --prefix "$ACTION_PATH" "pa11y-ci@$PA11Y_CI_VERSION"
+      run: npm install --no-save --no-audit --no-fund --prefix "$ACTION_PATH" "pa11y-ci@$PA11Y_CI_VERSION" # zizmor: ignore[adhoc-packages]
       env:
         ACTION_PATH: ${{ github.action_path }}
         PA11Y_CI_VERSION: ${{ inputs.pa11y-ci-version }}

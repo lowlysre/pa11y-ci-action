@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import {findConfigPath, buildSyntheticConfig, parseUrlsInput} from '../../src/lib/config.js';
+import {findConfigPath, buildSyntheticConfig, parseUrlsInput, parseIntegerInput} from '../../src/lib/config.js';
 
 test('findConfigPath returns the explicit config path when it exists', () => {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pa11y-ci-action-test-'));
@@ -65,4 +65,20 @@ test('parseUrlsInput splits on newlines and drops blank lines', () => {
 
 test('parseUrlsInput returns an empty array for an empty input', () => {
 	assert.deepEqual(parseUrlsInput(''), []);
+});
+
+test('parseIntegerInput accepts whole numbers at or above the minimum', () => {
+	assert.equal(parseIntegerInput('threshold', '0', {min: 0}), 0);
+	assert.equal(parseIntegerInput('threshold', ' 12 ', {min: 0}), 12);
+	assert.equal(parseIntegerInput('concurrency', '4', {min: 1}), 4);
+});
+
+test('parseIntegerInput rejects junk, decimals, negatives, and unsafe integers', () => {
+	for (const value of ['abc', '2x', '1.5', '-1', '', '1e3', '99999999999999999999']) {
+		assert.throws(() => parseIntegerInput('threshold', value, {min: 0}), /`threshold` must be a whole number/, value);
+	}
+});
+
+test('parseIntegerInput rejects values below the minimum', () => {
+	assert.throws(() => parseIntegerInput('concurrency', '0', {min: 1}), /at least 1, got "0"/);
 });

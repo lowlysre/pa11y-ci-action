@@ -8158,10 +8158,10 @@ var require_fixed_queue = __commonJS({
         this.head.push(data);
       }
       shift() {
-        const tail = this.tail;
-        const next = tail.shift();
-        if (tail.isEmpty() && tail.next !== null) {
-          this.tail = tail.next;
+        const tail2 = this.tail;
+        const next = tail2.shift();
+        if (tail2.isEmpty() && tail2.next !== null) {
+          this.tail = tail2.next;
         }
         return next;
       }
@@ -14947,7 +14947,7 @@ var require_util4 = __commonJS({
     var { getEncoding } = require_encoding();
     var { serializeAMimeType, parseMIMEType } = require_data_url();
     var { types } = __require("node:util");
-    var { StringDecoder } = __require("string_decoder");
+    var { StringDecoder: StringDecoder2 } = __require("string_decoder");
     var { btoa } = __require("node:buffer");
     var staticPropertyDescriptors = {
       enumerable: true,
@@ -15038,7 +15038,7 @@ var require_util4 = __commonJS({
             dataURL += serializeAMimeType(parsed);
           }
           dataURL += ";base64,";
-          const decoder = new StringDecoder("latin1");
+          const decoder = new StringDecoder2("latin1");
           for (const chunk of bytes) {
             dataURL += btoa(decoder.write(chunk));
           }
@@ -15067,7 +15067,7 @@ var require_util4 = __commonJS({
         }
         case "BinaryString": {
           let binaryString = "";
-          const decoder = new StringDecoder("latin1");
+          const decoder = new StringDecoder2("latin1");
           for (const chunk of bytes) {
             binaryString += decoder.write(chunk);
           }
@@ -17339,7 +17339,7 @@ var require_permessage_deflate = __commonJS({
     var { createInflateRaw, Z_DEFAULT_WINDOWBITS } = __require("node:zlib");
     var { isValidClientWindowBits } = require_util7();
     var { MessageSizeExceededError } = require_errors();
-    var tail = Buffer.from([0, 0, 255, 255]);
+    var tail2 = Buffer.from([0, 0, 255, 255]);
     var kBuffer = /* @__PURE__ */ Symbol("kBuffer");
     var kLength = /* @__PURE__ */ Symbol("kLength");
     var PerMessageDeflate = class {
@@ -17397,7 +17397,7 @@ var require_permessage_deflate = __commonJS({
         }
         this.#inflate.write(chunk);
         if (fin) {
-          this.#inflate.write(tail);
+          this.#inflate.write(tail2);
         }
         this.#inflate.flush(() => {
           if (!this.#inflate) {
@@ -20180,8 +20180,8 @@ var Summary = class {
    * @returns {Summary} summary instance
    */
   addTable(rows) {
-    const tableBody = rows.map((row) => {
-      const cells = row.map((cell) => {
+    const tableBody = rows.map((row2) => {
+      const cells = row2.map((cell) => {
         if (typeof cell === "string") {
           return this.wrap("td", cell);
         }
@@ -20285,6 +20285,9 @@ var summary = _summary;
 
 // node_modules/@actions/core/lib/platform.js
 import os4 from "os";
+
+// node_modules/@actions/exec/lib/exec.js
+import { StringDecoder } from "string_decoder";
 
 // node_modules/@actions/exec/lib/toolrunner.js
 import * as os3 from "os";
@@ -20998,6 +21001,38 @@ function exec(commandLine, args, options) {
     args = commandArgs.slice(1).concat(args || []);
     const runner = new ToolRunner(toolPath, args, options);
     return runner.exec();
+  });
+}
+function getExecOutput(commandLine, args, options) {
+  return __awaiter5(this, void 0, void 0, function* () {
+    var _a, _b;
+    let stdout = "";
+    let stderr = "";
+    const stdoutDecoder = new StringDecoder("utf8");
+    const stderrDecoder = new StringDecoder("utf8");
+    const originalStdoutListener = (_a = options === null || options === void 0 ? void 0 : options.listeners) === null || _a === void 0 ? void 0 : _a.stdout;
+    const originalStdErrListener = (_b = options === null || options === void 0 ? void 0 : options.listeners) === null || _b === void 0 ? void 0 : _b.stderr;
+    const stdErrListener = (data) => {
+      stderr += stderrDecoder.write(data);
+      if (originalStdErrListener) {
+        originalStdErrListener(data);
+      }
+    };
+    const stdOutListener = (data) => {
+      stdout += stdoutDecoder.write(data);
+      if (originalStdoutListener) {
+        originalStdoutListener(data);
+      }
+    };
+    const listeners = Object.assign(Object.assign({}, options === null || options === void 0 ? void 0 : options.listeners), { stdout: stdOutListener, stderr: stdErrListener });
+    const exitCode = yield exec(commandLine, args, Object.assign(Object.assign({}, options), { listeners }));
+    stdout += stdoutDecoder.end();
+    stderr += stderrDecoder.end();
+    return {
+      exitCode,
+      stdout,
+      stderr
+    };
   });
 }
 
@@ -25254,6 +25289,14 @@ function buildSyntheticConfig({ urls, sitemap, standard, concurrency }) {
     urls
   };
 }
+function parseIntegerInput(name, value, { min }) {
+  const trimmed = value.trim();
+  const parsed = /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < min) {
+    throw new Error(`\`${name}\` must be a whole number of at least ${min}, got "${value}"`);
+  }
+  return parsed;
+}
 function parseUrlsInput(urlsInput) {
   return urlsInput.split("\n").map((url) => url.trim()).filter(Boolean);
 }
@@ -25265,42 +25308,28 @@ import path5 from "node:path";
 function resolveBinPath() {
   return __require.resolve("pa11y-ci/bin/pa11y-ci.js");
 }
-async function runPa11yCi({ cwd, configPath, config, sitemap }) {
-  const args = ["--json"];
-  if (configPath) {
-    args.push("--config", configPath);
-  } else {
-    args.push("--config", writeSyntheticConfig(cwd, config));
-  }
+var MAX_ERROR_OUTPUT = 4e3;
+function tail(text) {
+  return text.length > MAX_ERROR_OUTPUT ? `\u2026${text.slice(-MAX_ERROR_OUTPUT)}` : text;
+}
+async function runPa11yCi({ cwd, configPath, config, sitemap }, { getExecOutput: getExecOutput2 = getExecOutput, binPath = resolveBinPath() } = {}) {
+  const args = [binPath, "--json", "--config", configPath ?? writeSyntheticConfig(config)];
   if (sitemap) {
     args.push("--sitemap", sitemap);
   }
-  let stdout = "";
-  let stderr = "";
-  const exitCode = await exec(`"${process.execPath}"`, [resolveBinPath(), ...args], {
-    cwd,
-    ignoreReturnCode: true,
-    listeners: {
-      stdout: (data) => {
-        stdout += data.toString();
-      },
-      stderr: (data) => {
-        stderr += data.toString();
-      }
-    }
-  });
+  const { exitCode, stdout, stderr } = await getExecOutput2(`"${process.execPath}"`, args, { cwd, ignoreReturnCode: true, silent: true });
   if (exitCode !== 0 && exitCode !== 2) {
     throw new Error(`pa11y-ci exited with code ${exitCode}:
-${stderr}`);
+${tail(stderr || stdout)}`);
   }
   try {
     return JSON.parse(stdout);
   } catch (error2) {
     throw new Error(`could not parse pa11y-ci JSON output: ${error2.message}
-${stdout}`);
+${tail(stderr || stdout)}`);
   }
 }
-function writeSyntheticConfig(cwd, config) {
+function writeSyntheticConfig(config) {
   const configPath = path5.join(fs4.mkdtempSync(path5.join(os6.tmpdir(), "pa11y-ci-action-")), "config.json");
   fs4.writeFileSync(configPath, JSON.stringify(config));
   return configPath;
@@ -25308,14 +25337,16 @@ function writeSyntheticConfig(cwd, config) {
 
 // src/lib/report.js
 var MARKER = "<!-- pa11y-ci-action-summary -->";
+var COMMENT_MAX_BYTES = 65536;
+var SUMMARY_MAX_BYTES = 1024 * 1024;
 function summarize(report, threshold) {
   const urls = Object.entries(report.results).map(([url, issues]) => {
     if (issues.length === 1 && issues[0].message && !issues[0].code) {
-      return { url, crashed: true, message: issues[0].message, counts: { error: 0, warning: 0, notice: 0 } };
+      return { url, crashed: true, message: issues[0].message };
     }
     const counts = { error: 0, warning: 0, notice: 0 };
-    for (const issue2 of issues) {
-      counts[issue2.type] = (counts[issue2.type] || 0) + 1;
+    for (const { type } of issues) {
+      counts[type] = (counts[type] ?? 0) + 1;
     }
     return { url, crashed: false, issues: issues.length, counts };
   });
@@ -25341,61 +25372,88 @@ function failureMessage(summary2, threshold) {
   }
   return reasons.length > 0 ? `pa11y-ci ${reasons.join(" and ")}` : null;
 }
-function buildMarkdown(summary2) {
-  const lines = [
+function escapeMarkdownCell(text) {
+  return String(text).replace(/\r\n|\r|\n/g, " ").replace(/&/g, "&amp;").replace(/[\\`*_[\]<>|~]/g, "\\$&").replace(/@/g, "@\u200B");
+}
+var MAX_ERROR_MESSAGE = 500;
+function row(url) {
+  const name = escapeMarkdownCell(url.url);
+  if (url.crashed) {
+    const message = url.message.length > MAX_ERROR_MESSAGE ? `${url.message.slice(0, MAX_ERROR_MESSAGE)}\u2026` : url.message;
+    return `| ${name} | :warning: failed to load: ${escapeMarkdownCell(message)} | | |`;
+  }
+  return `| ${name} | ${url.counts.error} | ${url.counts.warning} | ${url.counts.notice} |`;
+}
+function rank(url) {
+  if (url.crashed) {
+    return 0;
+  }
+  return url.issues > 0 ? 1 : 2;
+}
+function omittedNote(count) {
+  return `
+
+_${count} more URL(s) not shown to stay within GitHub's size limit. See the \`report-json\` output for the full results._`;
+}
+function buildMarkdown(summary2, { maxBytes = Number.POSITIVE_INFINITY } = {}) {
+  const header = [
     MARKER,
-    `### pa11y-ci results`,
+    "### pa11y-ci results",
     "",
     `${summary2.passed ? ":white_check_mark:" : ":x:"} **${summary2.passedUrls}/${summary2.totalUrls}** URLs passed, **${summary2.totalIssues}** issue(s) found`,
     "",
     "| URL | Errors | Warnings | Notices |",
     "| --- | --- | --- | --- |"
-  ];
-  for (const url of summary2.urls) {
-    if (url.crashed) {
-      lines.push(`| ${url.url} | :warning: failed to load: ${url.message} | | |`);
-      continue;
-    }
-    lines.push(`| ${url.url} | ${url.counts.error} | ${url.counts.warning} | ${url.counts.notice} |`);
+  ].join("\n");
+  const rows = summary2.urls.toSorted((a, b) => rank(a) - rank(b)).map(row);
+  const full = [header, ...rows].join("\n");
+  if (Buffer.byteLength(full) <= maxBytes) {
+    return full;
   }
-  return lines.join("\n");
+  const budget = maxBytes - Buffer.byteLength(omittedNote(rows.length));
+  let bytes = Buffer.byteLength(header);
+  const shown = rows.findIndex((line) => (bytes += Buffer.byteLength(line) + 1) > budget);
+  return [header, ...rows.slice(0, shown)].join("\n") + omittedNote(rows.length - shown);
 }
 
 // src/lib/comment.js
+function isRateLimited(error2) {
+  return error2?.response?.headers?.["x-ratelimit-remaining"] === "0" || /rate limit/i.test(error2?.message ?? "");
+}
 function permissionWarning(error2) {
-  if (error2?.status !== 403) {
+  if (error2?.status !== 403 || isRateLimited(error2)) {
     return null;
   }
-  return "Skipped the PR comment: the token lacks `pull-requests: write`. Add it to the job's `permissions`. Pull requests from forks get a read-only token and can't be commented on.";
+  const detail = error2.message ? ` (GitHub said: ${error2.message})` : "";
+  return `Skipped the PR comment: GitHub returned 403${detail}. The token most likely lacks \`pull-requests: write\`. Add it to the job's \`permissions\`. Pull requests from forks get a read-only token and can't be commented on.`;
+}
+async function resolveTokenLogin(octokit) {
+  const restLogin = await octokit.rest.users.getAuthenticated().then(({ data }) => data.login, () => null);
+  if (restLogin) {
+    return restLogin;
+  }
+  const appLogin = await octokit.graphql("query { viewer { login } }").then(({ viewer }) => viewer.login, () => null);
+  if (appLogin) {
+    return appLogin.endsWith("[bot]") ? appLogin : `${appLogin}[bot]`;
+  }
+  return "github-actions[bot]";
 }
 async function upsertComment(octokit, { owner, repo, issueNumber, body }) {
-  const comments = await octokit.paginate(octokit.rest.issues.listComments, {
-    owner,
-    repo,
-    issue_number: issueNumber
-  });
-  const existing = comments.find((comment) => comment.body.includes(MARKER));
+  const login = await resolveTokenLogin(octokit);
+  const comments = await octokit.paginate(octokit.rest.issues.listComments, { owner, repo, issue_number: issueNumber });
+  const existing = comments.find((comment) => comment.body?.includes(MARKER) && comment.user?.login === login);
   if (existing) {
-    await octokit.rest.issues.updateComment({
-      owner,
-      repo,
-      comment_id: existing.id,
-      body
-    });
-    return;
+    await octokit.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+  } else {
+    await octokit.rest.issues.createComment({ owner, repo, issue_number: issueNumber, body });
   }
-  await octokit.rest.issues.createComment({
-    owner,
-    repo,
-    issue_number: issueNumber,
-    body
-  });
 }
 
 // src/index.js
 async function run() {
   const workingDirectory = path6.resolve(getInput("working-directory") || ".");
-  const threshold = parseInt(getInput("threshold") || "0", 10);
+  const threshold = parseIntegerInput("threshold", getInput("threshold") || "0", { min: 0 });
+  const concurrency = parseIntegerInput("concurrency", getInput("concurrency") || "1", { min: 1 });
   const commentOnPr = getBooleanInput("comment-on-pr");
   const configPath = findConfigPath(getInput("config"), workingDirectory);
   const sitemap = configPath ? void 0 : getInput("sitemap") || void 0;
@@ -25403,12 +25461,11 @@ async function run() {
     urls: parseUrlsInput(getInput("urls")),
     sitemap,
     standard: getInput("standard") || "WCAG2AA",
-    concurrency: parseInt(getInput("concurrency") || "1", 10)
+    concurrency
   });
   info(configPath ? `using pa11y-ci config at ${configPath}` : "no pa11y-ci config found, using urls/sitemap/standard/concurrency inputs");
   const report = await runPa11yCi({ cwd: workingDirectory, configPath, config: syntheticConfig, sitemap });
   const summary2 = summarize(report, threshold);
-  const markdown = buildMarkdown(summary2);
   const reportPath = path6.join(fs5.mkdtempSync(path6.join(os7.tmpdir(), "pa11y-ci-action-report-")), "report.json");
   fs5.writeFileSync(reportPath, JSON.stringify(report, null, 2));
   setOutput("total-urls", summary2.totalUrls);
@@ -25416,31 +25473,28 @@ async function run() {
   setOutput("total-issues", summary2.totalIssues);
   setOutput("passed", summary2.passed);
   setOutput("report-json", reportPath);
-  await summary.addRaw(markdown).write();
+  await summary.addRaw(buildMarkdown(summary2, { maxBytes: SUMMARY_MAX_BYTES })).write();
   if (commentOnPr) {
-    const pullRequest = context2.payload.pull_request;
-    if (!pullRequest) {
-      warning("comment-on-pr is true, but this run was not triggered by a pull_request event; skipping comment");
-    } else {
-      const octokit = getOctokit(getInput("github-token"));
-      try {
-        await upsertComment(octokit, {
-          owner: context2.repo.owner,
-          repo: context2.repo.repo,
-          issueNumber: pullRequest.number,
-          body: markdown
-        });
-      } catch (error2) {
-        const warning2 = permissionWarning(error2);
-        if (!warning2) {
-          throw error2;
-        }
-        warning(warning2);
-      }
-    }
+    await commentOnPullRequest(buildMarkdown(summary2, { maxBytes: COMMENT_MAX_BYTES }));
   }
   if (!summary2.passed) {
     setFailed(failureMessage(summary2, threshold));
+  }
+}
+async function commentOnPullRequest(body) {
+  if (!context2.payload.pull_request) {
+    warning("comment-on-pr is true, but this run was not triggered by a pull_request event; skipping comment");
+    return;
+  }
+  const { owner, repo, number } = context2.issue;
+  try {
+    await upsertComment(getOctokit(getInput("github-token")), { owner, repo, issueNumber: number, body });
+  } catch (error2) {
+    const warning2 = permissionWarning(error2);
+    if (!warning2) {
+      throw error2;
+    }
+    warning(warning2);
   }
 }
 run().catch((error2) => {
