@@ -1,2 +1,116 @@
 # pa11y-ci-action
-:robot: A GitHub Action wrapper for pa11y-ci
+
+:robot: A GitHub Action wrapper for [pa11y-ci](https://github.com/pa11y/pa11y-ci): run WCAG accessibility checks against a list of URLs or a sitemap, and get a job summary (and, optionally, a sticky PR comment) instead of raw console output.
+
+## Tutorial: quickstart
+
+Add a `.pa11yci` config to your repo (see [pa11y-ci's config docs](https://github.com/pa11y/pa11y-ci#pa11y-ci)), or skip it and pass `urls`/`sitemap` directly:
+
+```yaml
+name: Accessibility
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  pa11y:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: lowlysre/pa11y-ci-action@v1
+        with:
+          urls: |
+            https://example.com
+            https://example.com/about
+```
+
+On a page with issues, the job fails and the run's job summary lists the URL, and its error/warning/notice counts.
+
+## How-to guides
+
+### Use an existing `.pa11yci` config
+
+If a `.pa11yci`, `.pa11yci.json`, `.pa11yci.js`, or `.pa11yci.cjs` file exists in `working-directory`, the action uses it as-is via pa11y-ci's own `--config` flag. The `urls`, `sitemap`, `standard`, and `concurrency` inputs are only used to synthesize a config when none of those files exist, so set them directly in your `.pa11yci` file instead.
+
+### Tune the failure threshold
+
+`threshold` is passed straight through to pa11y-ci's own `--threshold` flag: the number of issues permitted before the action fails. Set it above `0` to allow a known baseline of issues while still catching regressions:
+
+```yaml
+      - uses: lowlysre/pa11y-ci-action@v1
+        with:
+          sitemap: https://example.com/sitemap.xml
+          threshold: 5
+```
+
+### Post a sticky PR comment
+
+Set `comment-on-pr: true` on a `pull_request`-triggered run to post or update a single comment on the PR with the same summary table as the job summary. This needs `pull-requests: write`:
+
+```yaml
+on: pull_request
+
+permissions:
+  pull-requests: write
+
+jobs:
+  pa11y:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: lowlysre/pa11y-ci-action@v1
+        with:
+          urls: https://example.com
+          comment-on-pr: true
+```
+
+`comment-on-pr` is a no-op (with a warning) on any event other than `pull_request`, so it's safe to leave set on a workflow that also runs on `push`.
+
+## Reference
+
+### Inputs
+
+| Input | Description | Default |
+| --- | --- | --- |
+| `config` | Path to an existing pa11y-ci config file. | looked up automatically |
+| `urls` | Newline-separated URLs to test. Only used when no config file is found. | |
+| `sitemap` | Sitemap URL to crawl. Only used when no config file is found. | |
+| `standard` | `WCAG2A`, `WCAG2AA`, `WCAG2AAA`, or `Section508`. Only used when no config file is found. | `WCAG2AA` |
+| `threshold` | Number of issues permitted before the action fails. | `0` |
+| `concurrency` | Pages to test in parallel. Only used when no config file is found. | `1` |
+| `working-directory` | Directory to resolve the config file and run pa11y-ci from. | `.` |
+| `comment-on-pr` | Post or update a sticky summary comment on the triggering pull request. | `false` |
+| `github-token` | Token used for `comment-on-pr`. Needs `pull-requests: write`. | `github.token` |
+
+### Outputs
+
+| Output | Description |
+| --- | --- |
+| `total-urls` | Number of URLs tested. |
+| `passed-urls` | Number of URLs with no issues. |
+| `total-issues` | Total issues found across all URLs. |
+| `passed` | `true` if the run was within the configured threshold. |
+| `report-json` | Path to the raw pa11y-ci JSON report on the runner's temp directory. |
+
+### Permissions
+
+The action itself needs no permissions beyond `contents: read` to check out the config file. `comment-on-pr: true` additionally needs `pull-requests: write` on the job.
+
+## Explanation
+
+### Why not `npx pa11y-ci` in your own workflow
+
+You can, and plenty of repos do. This wraps that in one `uses:` line with a pinned `pa11y-ci` version, a parsed report instead of console text, and a threshold-aware exit code you don't have to reimplement per repo.
+
+### Design
+
+The action runs pa11y-ci as a separate child process rather than importing it as a library. pa11y-ci is [LGPL-3.0-only licensed](https://github.com/pa11y/pa11y-ci/blob/main/LICENSE); invoking its CLI as a subprocess keeps a clean boundary instead of statically linking LGPL code into this action's bundle.
+
+The action is bundled with [esbuild](https://esbuild.github.io/) into a single ESM `dist/index.mjs`, not [`@vercel/ncc`](https://github.com/vercel/ncc): `ncc` hasn't kept up with the `@actions/*` toolkit's move to ESM-only exports, and can't resolve them.
+
+### Known gaps
+
+- pa11y-ci's dependency chain (puppeteer via `pa11y`) currently pulls in a vulnerable `extract-zip` ([GHSA-jmr9-qjv8-65gv](https://github.com/advisories/GHSA-jmr9-qjv8-65gv), [GHSA-7pqw-9j4j-h8q3](https://github.com/advisories/GHSA-7pqw-9j4j-h8q3)), used only to unpack the downloaded Chromium build. There's no non-breaking fix upstream at time of writing; `npm audit fix --force` downgrades `pa11y-ci` to `3.1.0`, which is a breaking change.
+- Each run downloads a Chromium build via `npm ci` since `node_modules` isn't committed or cached. Caching that install (keyed on `package-lock.json`) is a reasonable follow-up if run time becomes a problem.

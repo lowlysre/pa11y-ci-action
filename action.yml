@@ -1,0 +1,57 @@
+name: 'pa11y-ci-action'
+description: 'Run pa11y-ci accessibility checks and report results as a job summary and, optionally, a PR comment.'
+author: 'lowlysre'
+branding:
+  icon: 'check-circle'
+  color: 'purple'
+
+inputs:
+  config:
+    description: 'Path to an existing pa11y-ci config file (JSON or JS). If omitted, one is looked up at `.pa11yci`/`.pa11yci.json`, then synthesized from the `urls`/`sitemap`/`standard`/`concurrency` inputs.'
+    required: false
+  urls:
+    description: 'Newline-separated list of URLs to test. Only used when no config file is found.'
+    required: false
+  sitemap:
+    description: 'Sitemap URL to crawl for pages to test.'
+    required: false
+  standard:
+    description: 'Accessibility standard to test against: WCAG2A, WCAG2AA, WCAG2AAA, or Section508. Only used when no config file is found.'
+    required: false
+    default: 'WCAG2AA'
+  threshold:
+    description: 'Number of errors permitted before the action fails.'
+    required: false
+    default: '0'
+  concurrency:
+    description: 'Number of pages to test in parallel. Only used when no config file is found.'
+    required: false
+    default: '1'
+  working-directory:
+    description: 'Directory to resolve the config file and run pa11y-ci from.'
+    required: false
+    default: '.'
+  comment-on-pr:
+    description: 'Post or update a sticky summary comment on the triggering pull request.'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token used to post the PR comment. Requires `pull-requests: write`.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  total-urls:
+    description: 'Number of URLs tested.'
+  passed-urls:
+    description: 'Number of URLs with no issues.'
+  total-issues:
+    description: 'Total number of issues found across all URLs.'
+  passed:
+    description: '`true` if the run was within the configured threshold.'
+  report-json:
+    description: 'Path to the raw pa11y-ci JSON report written to the runner temp directory.'
+
+runs:
+  using: 'node24'
+  main: 'dist/index.mjs'
