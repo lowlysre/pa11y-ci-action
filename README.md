@@ -11,6 +11,24 @@
 
 A GitHub Action wrapper for [pa11y-ci](https://github.com/pa11y/pa11y-ci): run WCAG accessibility checks against a list of URLs or a sitemap, and get a job summary (and, optionally, a sticky PR comment) instead of raw console output.
 
+## Contents
+
+- [Tutorial: quickstart](#tutorial-quickstart)
+- [How-to guides](#how-to-guides)
+  - [Use an existing `.pa11yci` config](#use-an-existing-pa11yci-config)
+  - [Tune the failure threshold](#tune-the-failure-threshold)
+  - [Pin or upgrade the pa11y-ci version](#pin-or-upgrade-the-pa11y-ci-version)
+  - [Post a sticky PR comment](#post-a-sticky-pr-comment)
+- [Reference](#reference)
+  - [Inputs](#inputs)
+  - [Outputs](#outputs)
+  - [Permissions](#permissions)
+- [Explanation](#explanation)
+  - [Why not `npx pa11y-ci` in your own workflow](#why-not-npx-pa11y-ci-in-your-own-workflow)
+  - [Design](#design)
+  - [Known gaps](#known-gaps)
+- [Acknowledgements](#acknowledgements)
+
 ## Tutorial: quickstart
 
 Add a `.pa11yci` config to your repo (see [pa11y-ci's config docs](https://github.com/pa11y/pa11y-ci#pa11y-ci)), or skip it and pass `urls`/`sitemap` directly:
