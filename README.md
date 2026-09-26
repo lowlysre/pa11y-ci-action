@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero.svg" alt="pa11y-ci-action: accessibility checks in CI, reported where you'll read them" width="100%">
+  <img src="assets/hero.svg" alt="pa11y-ci-action: Unofficial GitHub Action for pa11y-ci" width="100%">
 </p>
 
 <p align="center">

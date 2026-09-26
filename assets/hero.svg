@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="t d">
   <title id="t">pa11y-ci-action</title>
-  <desc id="d">A GitHub Action wrapper for pa11y-ci. Illustration of a job summary listing tested URLs with pass and fail results.</desc>
+  <desc id="d">Unofficial GitHub Action for pa11y-ci. Illustration of a job summary listing tested URLs with pass and fail results.</desc>
   <defs>
     <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
       <circle cx="2" cy="2" r="1.2" fill="#30363d"/>
@@ -22,7 +22,7 @@
   <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
     <text x="72" y="150" font-size="14" fill="#a371f7">uses: lowlysre/pa11y-ci-action@acce551b1e4a119f2d7c03e8b16a5d4c7e91f0a3</text>
     <text x="72" y="214" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="58" font-weight="700" fill="#e6edf3" letter-spacing="-1.5">pa11y-ci-action</text>
-    <text x="72" y="256" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" fill="#9198a1">Accessibility checks in CI, reported where you'll read them.</text>
+    <text x="72" y="256" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="22" fill="#9198a1">Unofficial GitHub Action for pa11y-ci</text>
     <g font-size="14">
       <rect x="72" y="290" width="80" height="30" rx="15" fill="none" stroke="#a371f7"/>
       <text x="112" y="310" text-anchor="middle" fill="#a371f7">WCAG2A</text>
