@@ -145,11 +145,25 @@ test('the bundle supports generated configs and promised JavaScript configs', as
 	assert.equal(promised.code, 0, promised.stdout + promised.stderr);
 });
 
-test('the bundle suppresses caller reporters and honors the exact config filename', async () => {
+test('the bundle suppresses caller reporters', async () => {
 	const reporter = await run('reporter', {defaults: {...defaults, reporters: ['json']}, urls: [passing]});
 	assert.equal(reporter.code, 0, reporter.stdout + reporter.stderr);
-	fs.writeFileSync(path.join(directory, 'exact.cjs'), `module.exports = ${JSON.stringify({defaults, urls: [passing]})};`);
-	const exact = await run('exact', {defaults, urls: [failing]});
+});
+
+test('the bundle selects the exact JSON file instead of a higher-priority CJS sibling', async () => {
+	fs.writeFileSync(path.join(directory, 'exact-json.cjs'), `module.exports = ${JSON.stringify({defaults, urls: [passing]})};`);
+	const exact = await run('exact-json', {defaults, urls: [failing]}, {
+		INPUT_CONFIG: path.join(directory, 'exact-json.json')
+	});
+	assert.equal(exact.code, 1);
+	assert.ok(Number(exact.outputs['total-issues']) > 0);
+});
+
+test('the bundle selects the exact CJS file instead of a higher-priority extensionless sibling', async () => {
+	fs.writeFileSync(path.join(directory, 'exact-cjs'), JSON.stringify({defaults, urls: [passing]}));
+	const configPath = path.join(directory, 'exact-cjs.cjs');
+	fs.writeFileSync(configPath, `module.exports = ${JSON.stringify({defaults, urls: [failing]})};`);
+	const exact = await run('exact-cjs', null, {INPUT_CONFIG: configPath});
 	assert.equal(exact.code, 1);
 	assert.ok(Number(exact.outputs['total-issues']) > 0);
 });
