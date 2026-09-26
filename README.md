@@ -152,7 +152,7 @@ jobs:
 
 ### Permissions
 
-The action itself needs no permissions beyond `contents: read` to check out the config file. `comment-on-pr: true` additionally needs `pull-requests: write` on the job.
+The action itself needs no permissions beyond `contents: read` to check out the config file. `comment-on-pr: true` additionally needs `pull-requests: write` on the job. Without it, the action logs a warning and skips the comment instead of failing. Pull requests from forks get a read-only token, so they get the same warning.
 
 ## Explanation
 

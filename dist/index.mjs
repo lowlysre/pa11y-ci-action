@@ -25348,6 +25348,12 @@ function buildMarkdown(summary2) {
 }
 
 // src/lib/comment.js
+function permissionWarning(error2) {
+  if (error2?.status !== 403) {
+    return null;
+  }
+  return "Skipped the PR comment: the token lacks `pull-requests: write`. Add it to the job's `permissions`. Pull requests from forks get a read-only token and can't be commented on.";
+}
 async function upsertComment(octokit, { owner, repo, issueNumber, body }) {
   const comments = await octokit.paginate(octokit.rest.issues.listComments, {
     owner,
@@ -25403,12 +25409,20 @@ async function run() {
       warning("comment-on-pr is true, but this run was not triggered by a pull_request event; skipping comment");
     } else {
       const octokit = getOctokit(getInput("github-token"));
-      await upsertComment(octokit, {
-        owner: context2.repo.owner,
-        repo: context2.repo.repo,
-        issueNumber: pullRequest.number,
-        body: markdown
-      });
+      try {
+        await upsertComment(octokit, {
+          owner: context2.repo.owner,
+          repo: context2.repo.repo,
+          issueNumber: pullRequest.number,
+          body: markdown
+        });
+      } catch (error2) {
+        const warning2 = permissionWarning(error2);
+        if (!warning2) {
+          throw error2;
+        }
+        warning(warning2);
+      }
     }
   }
   if (!summary2.passed) {

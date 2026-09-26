@@ -6,7 +6,7 @@ import * as github from '@actions/github';
 import {findConfigPath, buildSyntheticConfig, parseUrlsInput} from './lib/config.js';
 import {runPa11yCi} from './lib/runPa11yCi.js';
 import {summarize, buildMarkdown} from './lib/report.js';
-import {upsertComment} from './lib/comment.js';
+import {upsertComment, permissionWarning} from './lib/comment.js';
 
 async function run() {
 	const workingDirectory = path.resolve(core.getInput('working-directory') || '.');
@@ -47,12 +47,20 @@ async function run() {
 			core.warning('comment-on-pr is true, but this run was not triggered by a pull_request event; skipping comment');
 		} else {
 			const octokit = github.getOctokit(core.getInput('github-token'));
-			await upsertComment(octokit, {
-				owner: github.context.repo.owner,
-				repo: github.context.repo.repo,
-				issueNumber: pullRequest.number,
-				body: markdown
-			});
+			try {
+				await upsertComment(octokit, {
+					owner: github.context.repo.owner,
+					repo: github.context.repo.repo,
+					issueNumber: pullRequest.number,
+					body: markdown
+				});
+			} catch (error) {
+				const warning = permissionWarning(error);
+				if (!warning) {
+					throw error;
+				}
+				core.warning(warning);
+			}
 		}
 	}
 
