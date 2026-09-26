@@ -78,13 +78,9 @@ runs:
       with:
         path: ${{ runner.temp }}/pa11y-ci-action/puppeteer
         key: pa11y-ci-action-chromium-${{ runner.os }}-${{ runner.arch }}-${{ inputs.pa11y-ci-version }}
-    - name: Configure npm
-      uses: lowlydba/sustainable-npm@4cc1da285e5a589a7b3816122f791c21ec6ff3e6 # v4.0.0
-      with:
-        ignore-scripts: 'false'
     - name: Install pa11y-ci
       shell: bash
-      run: npm install --no-save --prefix "$ACTION_PATH" "pa11y-ci@$PA11Y_CI_VERSION"
+      run: npm install --no-save --no-audit --no-fund --prefix "$ACTION_PATH" "pa11y-ci@$PA11Y_CI_VERSION"
       env:
         ACTION_PATH: ${{ github.action_path }}
         PA11Y_CI_VERSION: ${{ inputs.pa11y-ci-version }}
