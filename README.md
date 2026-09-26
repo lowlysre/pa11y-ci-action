@@ -172,4 +172,4 @@ You can, and plenty of repos do. This wraps that in one `uses:` line with a pinn
 
 ## Acknowledgements
 
-Thanks to the [pa11y](https://github.com/pa11y) maintainers and contributors, who build pa11y and pa11y-ci. This action only wraps their work. It isn't affiliated with or endorsed by the pa11y project.
+🙏 Thanks to the [pa11y](https://github.com/pa11y) maintainers and contributors, who build [pa11y](https://github.com/pa11y/pa11y) and [pa11y-ci](https://github.com/pa11y/pa11y-ci). This action only wraps their work. It isn't affiliated with or endorsed by the pa11y project.
