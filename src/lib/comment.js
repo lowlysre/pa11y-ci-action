@@ -44,10 +44,10 @@ export async function resolveTokenLogin(octokit) {
  * update the same comment instead of piling up new ones. Only comments
  * the token itself wrote count, so nobody else can hijack the marker.
  */
-export async function upsertComment(octokit, {owner, repo, issueNumber, body}) {
+export async function upsertComment(octokit, {owner, repo, issueNumber, body, marker = MARKER}) {
 	const login = await resolveTokenLogin(octokit);
 	const comments = await octokit.paginate(octokit.rest.issues.listComments, {owner, repo, issue_number: issueNumber});
-	const existing = comments.find(comment => comment.body?.includes(MARKER) && comment.user?.login === login);
+	const existing = comments.find(comment => comment.body?.includes(marker) && comment.user?.login === login);
 
 	if (existing) {
 		await octokit.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});

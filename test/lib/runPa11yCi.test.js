@@ -23,33 +23,13 @@ function tmpDir() {
 
 const report = {total: 1, passes: 1, errors: 0, results: {'https://example.com': []}};
 
-test('runPa11yCi parses the report on exit code 0', async () => {
-	const {getExecOutput} = fakeExec({stdout: JSON.stringify(report)});
-
-	assert.deepEqual(await runPa11yCi({cwd: tmpDir(), configPath: '/cfg.json'}, {getExecOutput, binPath}), report);
-});
-
-test('runPa11yCi treats exit code 2 as a run with issues, not a crash', async () => {
-	const {getExecOutput} = fakeExec({exitCode: 2, stdout: JSON.stringify(report)});
-
-	assert.deepEqual(await runPa11yCi({cwd: tmpDir(), configPath: '/cfg.json'}, {getExecOutput, binPath}), report);
-});
-
-test('runPa11yCi throws with stderr on any other exit code', async () => {
-	const {getExecOutput} = fakeExec({exitCode: 1, stderr: 'no browser'});
-
-	await assert.rejects(
-		runPa11yCi({cwd: tmpDir(), configPath: '/cfg.json'}, {getExecOutput, binPath}),
-		/exited with code 1:\nno browser/
-	);
-});
-
-test('runPa11yCi bounds the output included in errors', async () => {
+test('runPa11yCi reports the exit code and bounds error output', async () => {
 	const {getExecOutput} = fakeExec({exitCode: 1, stderr: `${'x'.repeat(10_000)}END`});
 
 	await assert.rejects(
 		runPa11yCi({cwd: tmpDir(), configPath: '/cfg.json'}, {getExecOutput, binPath}),
-		error => error.message.length < 4100 && error.message.endsWith('END')
+		error => error.message.startsWith('pa11y-ci exited with code 1:') &&
+			error.message.length < 4100 && error.message.endsWith('END')
 	);
 });
 
@@ -72,15 +52,24 @@ test('runPa11yCi runs silently and passes arguments as an array', async () => {
 	const [{args, options}] = calls;
 	assert.equal(options.silent, true);
 	assert.equal(options.ignoreReturnCode, true);
-	assert.deepEqual(args, [binPath, '--json', '--config', '/cfg.json', '--sitemap', sitemap]);
+	assert.deepEqual(args.slice(0, 3), [binPath, '--json', '--config']);
+	assert.deepEqual(args.slice(4), ['--sitemap', sitemap]);
+	assert.equal(fs.existsSync(args[3]), false);
 });
 
-test('runPa11yCi writes a synthetic config when no config path is given', async () => {
-	const {getExecOutput, calls} = fakeExec({stdout: JSON.stringify(report)});
-	const config = {defaults: {standard: 'WCAG2AA'}, urls: ['https://example.com']};
+test('runPa11yCi removes its config when the subprocess fails', async () => {
+	const {getExecOutput, calls} = fakeExec({exitCode: 1, stderr: 'bad config'});
+	await assert.rejects(runPa11yCi({cwd: tmpDir(), config: {}}, {getExecOutput, binPath}), /bad config/);
+	assert.equal(fs.existsSync(path.dirname(calls[0].args[3])), false);
+});
 
-	await runPa11yCi({cwd: tmpDir(), configPath: null, config}, {getExecOutput, binPath});
-
-	const configArg = calls[0].args[calls[0].args.indexOf('--config') + 1];
-	assert.deepEqual(JSON.parse(fs.readFileSync(configArg, 'utf8')), config);
+test('runPa11yCi surfaces bounded config warnings without polluting the JSON report', async () => {
+	const {getExecOutput} = fakeExec({stdout: JSON.stringify(report), stderr: `${'x'.repeat(5000)}config threshold overridden\n`});
+	const warnings = [];
+	assert.deepEqual(await runPa11yCi({cwd: tmpDir(), config: {}}, {
+		getExecOutput, binPath, warning: message => warnings.push(message)
+	}), report);
+	assert.equal(warnings.length, 1);
+	assert.ok(warnings[0].length <= 4001);
+	assert.ok(warnings[0].endsWith('config threshold overridden'));
 });

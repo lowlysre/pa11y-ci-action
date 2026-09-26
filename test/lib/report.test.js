@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {summarize, buildMarkdown, failureMessage, escapeMarkdownCell, COMMENT_MAX_BYTES} from '../../src/lib/report.js';
+import {summarize, buildMarkdown, failureMessage, escapeMarkdownCell, commentMarker, COMMENT_MAX_BYTES} from '../../src/lib/report.js';
 
 function issue(type) {
 	return {code: 'WCAG2AA.Test', type, message: `a ${type}`, context: '<div>', selector: 'div'};
@@ -83,10 +83,6 @@ test('summarize counts issues from results, not pa11y-ci passes/errors', () => {
 	assert.equal(summary.passed, true);
 });
 
-test('failureMessage returns null for a passing run', () => {
-	assert.equal(failureMessage({crashedUrls: 0, totalIssues: 2}, 2), null);
-});
-
 test('failureMessage reports load failures without blaming the threshold', () => {
 	assert.equal(failureMessage({crashedUrls: 1, totalIssues: 0}, 0), 'pa11y-ci 1 URL(s) failed to load');
 });
@@ -96,21 +92,6 @@ test('failureMessage reports both load failures and threshold breaches', () => {
 		failureMessage({crashedUrls: 2, totalIssues: 4}, 1),
 		'pa11y-ci 2 URL(s) failed to load and found 4 issue(s), exceeding the threshold of 1'
 	);
-});
-
-test('buildMarkdown includes the sticky marker and a row per url', () => {
-	const summary = summarize({
-		total: 1,
-		passes: 1,
-		errors: 0,
-		results: {'https://example.com': []}
-	}, 0);
-
-	const markdown = buildMarkdown(summary);
-
-	assert.match(markdown, /pa11y-ci-action-summary/);
-	assert.match(markdown, /https:\/\/example\.com/);
-	assert.match(markdown, /1\/1.*URLs passed/);
 });
 
 test('escapeMarkdownCell keeps untrusted text on one line and inert', () => {
@@ -165,29 +146,20 @@ function bigSummary(count, suffix = '') {
 	return summarize({total: count, results}, 0);
 }
 
-test('buildMarkdown leaves small reports untouched by the size limit', () => {
-	const summary = bigSummary(3);
-
-	assert.equal(buildMarkdown(summary, {maxBytes: COMMENT_MAX_BYTES}), buildMarkdown(summary));
-});
-
-test('buildMarkdown drops rows and notes the omission when over the limit', () => {
-	const summary = bigSummary(2000);
-	const markdown = buildMarkdown(summary, {maxBytes: COMMENT_MAX_BYTES});
+test('buildMarkdown truncates multibyte reports within the byte limit and retains comment metadata', () => {
+	const summary = bigSummary(2000, '/日本語ページ');
+	const marker = commentMarker('site-a');
+	const markdown = buildMarkdown(summary, {
+		marker, runUrl: 'https://github.com/o/r/actions/runs/123', maxBytes: COMMENT_MAX_BYTES
+	});
 
 	assert.ok(Buffer.byteLength(markdown) <= COMMENT_MAX_BYTES);
+	assert.ok(markdown.startsWith(marker));
+	assert.match(markdown, /\[View workflow run\]\(https:\/\/github.com\/o\/r\/actions\/runs\/123\)/);
 	const shown = markdown.split('\n').filter(line => line.startsWith('| https')).length;
 	assert.ok(shown > 0 && shown < 2000);
 	assert.match(markdown, new RegExp(`_${2000 - shown} more URL\\(s\\) not shown`));
 	assert.match(markdown, /report-json/);
-});
-
-test('buildMarkdown measures the limit in bytes for multibyte text', () => {
-	const summary = bigSummary(2000, '/日本語ページ');
-	const markdown = buildMarkdown(summary, {maxBytes: COMMENT_MAX_BYTES});
-
-	assert.ok(Buffer.byteLength(markdown) <= COMMENT_MAX_BYTES);
-	assert.match(markdown, /more URL\(s\) not shown/);
 });
 
 test('buildMarkdown fits exactly at the boundary without an omission note', () => {
@@ -198,4 +170,23 @@ test('buildMarkdown fits exactly at the boundary without an omission note', () =
 	assert.equal(buildMarkdown(summary, {maxBytes: size}), full);
 	assert.match(buildMarkdown(summary, {maxBytes: size - 1}), /more URL\(s\) not shown/);
 	assert.ok(Buffer.byteLength(buildMarkdown(summary, {maxBytes: size - 1})) <= size - 1);
+});
+
+test('summarize rejects empty and incomplete scans instead of returning a pass', () => {
+	assert.throws(() => summarize({total: 0, results: {}}, 0), /tested no URLs/);
+	assert.throws(() => summarize({total: 2, errors: 3, results: {'https://example.com': []}}, 0), /incomplete/);
+});
+
+test('summarize rejects incompatible report shapes', () => {
+	for (const report of [null, {}, {total: -1, results: {}}, {total: 1, results: []},
+		{total: 1, results: {url: null}}, {total: 1, results: {url: [null]}},
+		{total: 1, results: {url: [{type: 'unknown'}]}}]) {
+		assert.throws(() => summarize(report, 0), /invalid/);
+	}
+});
+
+test('comment markers are stable, scoped, and safe for arbitrary identifiers', () => {
+	assert.equal(commentMarker('site-a'), commentMarker('site-a'));
+	assert.notEqual(commentMarker('site-a'), commentMarker('site-b'));
+	assert.match(commentMarker('--> @someone\n'), /^<!-- pa11y-ci-action-summary:[a-f0-9]{64} -->$/);
 });

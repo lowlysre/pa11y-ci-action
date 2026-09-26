@@ -1,4 +1,10 @@
+import {createHash} from 'node:crypto';
+
 export const MARKER = '<!-- pa11y-ci-action-summary -->';
+
+export function commentMarker(commentId) {
+	return `<!-- pa11y-ci-action-summary:${createHash('sha256').update(commentId).digest('hex')} -->`;
+}
 
 // GitHub rejects comment bodies over 65,536 characters. Measuring UTF-8
 // bytes instead is stricter, so a body that fits in bytes always fits.
@@ -13,14 +19,30 @@ export const SUMMARY_MAX_BYTES = 1024 * 1024;
  * don't count load failures as failures.
  */
 export function summarize(report, threshold) {
+	if (!report || !Number.isSafeInteger(report.total) || report.total < 0 ||
+		!report.results || typeof report.results !== 'object' || Array.isArray(report.results)) {
+		throw new Error('invalid pa11y-ci report: expected a total and a results object');
+	}
+	if (report.total === 0) {
+		throw new Error('pa11y-ci tested no URLs; add URLs to the config or provide a non-empty sitemap');
+	}
+	if (Object.keys(report.results).length !== report.total) {
+		throw new Error('incomplete pa11y-ci report: URL results do not match the number of tests; duplicate URLs or scenarios can overwrite results');
+	}
 	const urls = Object.entries(report.results).map(([url, issues]) => {
-		if (issues.length === 1 && issues[0].message && !issues[0].code) {
+		if (!Array.isArray(issues) || issues.some(issue => !issue || typeof issue !== 'object')) {
+			throw new Error(`invalid pa11y-ci results for "${url}": expected an array of issues`);
+		}
+		if (issues.length === 1 && typeof issues[0].message === 'string' && !issues[0].code) {
 			// pa11y-ci serializes a page-load Error as a single {message} object
 			return {url, crashed: true, message: issues[0].message};
 		}
 		const counts = {error: 0, warning: 0, notice: 0};
 		for (const {type} of issues) {
-			counts[type] = (counts[type] ?? 0) + 1;
+			if (!Object.hasOwn(counts, type)) {
+				throw new Error(`invalid pa11y-ci issue type for "${url}": ${type}`);
+			}
+			counts[type] += 1;
 		}
 		return {url, crashed: false, issues: issues.length, counts};
 	});
@@ -94,12 +116,13 @@ function omittedNote(count) {
  * Build the markdown table shared by the job summary and the PR comment,
  * dropping rows once the result would exceed `maxBytes`.
  */
-export function buildMarkdown(summary, {maxBytes = Number.POSITIVE_INFINITY} = {}) {
+export function buildMarkdown(summary, {maxBytes = Number.POSITIVE_INFINITY, marker = MARKER, runUrl} = {}) {
 	const header = [
-		MARKER,
+		marker,
 		'### pa11y-ci results',
 		'',
 		`${summary.passed ? ':white_check_mark:' : ':x:'} **${summary.passedUrls}/${summary.totalUrls}** URLs passed, **${summary.totalIssues}** issue(s) found`,
+		...(runUrl ? ['', `[View workflow run](${runUrl})`] : []),
 		'',
 		'| URL | Errors | Warnings | Notices |',
 		'| --- | --- | --- | --- |'
