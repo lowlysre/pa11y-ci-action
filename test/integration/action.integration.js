@@ -4,25 +4,67 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import net from 'node:net';
 import {pathToFileURL} from 'node:url';
 import {execFile} from 'node:child_process';
 
 const root = process.cwd();
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pa11y-ci-integration-'));
-after(() => fs.rmSync(directory, {recursive: true, force: true}));
+after(() => fs.rmSync(directory, {recursive: true, force: true, maxRetries: 5, retryDelay: 200}));
 const defaults = {chromeLaunchConfig: {args: ['--no-sandbox']}, concurrency: 1};
 const passing = pathToFileURL(path.join(root, 'test/fixtures/passing.html')).href;
 const failing = pathToFileURL(path.join(root, 'test/fixtures/failing.html')).href;
 
-function execute(file, env) {
+function stopProcessTree(child) {
+	if (process.platform !== 'win32') {
+		try {
+			process.kill(-child.pid, 'SIGKILL');
+		} catch (error) {
+			if (error.code !== 'ESRCH') {
+				throw error;
+			}
+		}
+		return Promise.resolve();
+	}
 	return new Promise((resolve, reject) => {
-		execFile(process.execPath, [path.join(root, file)], {env, timeout: 60_000}, (error, stdout, stderr) => {
+		execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], {timeout: 10_000}, (error, stdout, stderr) => {
+			if (error && child.exitCode === null && child.signalCode === null) {
+				reject(new Error(`could not stop test process tree ${child.pid}: ${stderr || stdout}`, {cause: error}));
+				return;
+			}
+			resolve();
+		});
+	});
+}
+
+function execute(file, env, timeout = 60_000) {
+	return new Promise((resolve, reject) => {
+		let termination;
+		const child = execFile(process.execPath, [path.resolve(root, file)], {
+			env, detached: process.platform !== 'win32'
+		}, async (error, stdout, stderr) => {
+			clearTimeout(timer);
+			if (termination) {
+				try {
+					await termination;
+				} catch (terminationError) {
+					reject(terminationError);
+					return;
+				}
+				reject(Object.assign(new Error(`${file} timed out after ${timeout}ms\n${stdout.slice(-4000)}\n${stderr.slice(-4000)}`),
+					{stdout, stderr}));
+				return;
+			}
 			if (error && typeof error.code !== 'number') {
 				reject(error);
 				return;
 			}
 			resolve({code: error?.code ?? 0, stdout, stderr});
 		});
+		const timer = setTimeout(() => {
+			termination = Promise.resolve().then(() => stopProcessTree(child));
+			termination.catch(reject);
+		}, timeout);
 	});
 }
 
@@ -151,10 +193,10 @@ test('the installer bundle installs pa11y-ci under production omission settings'
 	const outputPath = path.join(directory, 'install-outputs.txt');
 	fs.writeFileSync(outputPath, '');
 	const result = await execute('dist/install.mjs', {
-		...process.env, NODE_ENV: 'production', npm_config_omit: 'dev',
+		...process.env, NODE_ENV: 'production', npm_config_omit: 'dev', npm_config_loglevel: 'http',
 		PA11Y_CI_VERSION: '4.1.1', PUPPETEER_SKIP_DOWNLOAD: 'true',
 		RUNNER_TEMP: directory, GITHUB_OUTPUT: outputPath
-	});
+	}, 300_000);
 	assert.equal(result.code, 0, result.stdout + result.stderr);
 	const binary = fs.readFileSync(outputPath, 'utf8').match(/bin-path<<[^\r\n]+\r?\n([^\r\n]+)/)?.[1];
 	assert.ok(binary && fs.existsSync(binary));
@@ -163,4 +205,26 @@ test('the installer bundle installs pa11y-ci under production omission settings'
 	assert.equal(fs.existsSync(path.join(modules, '@actions/core')), false);
 	const isolated = await run('isolated-runtime', {defaults, urls: [passing]}, {PA11Y_CI_BIN: binary});
 	assert.equal(isolated.code, 0, isolated.stdout + isolated.stderr);
+});
+
+test('a timed-out command stops its descendants before cleanup', async () => {
+	let output;
+	await assert.rejects(execute('test/fixtures/process-tree.cjs', process.env, 3000), error => {
+		assert.match(error.message, /timed out after 3000ms/);
+		output = error.stdout;
+		return true;
+	});
+	const port = JSON.parse(output.trim()).port;
+	await new Promise((resolve, reject) => {
+		const socket = net.connect({host: '127.0.0.1', port});
+		socket.once('connect', () => {
+			socket.end('stop');
+			reject(new Error('descendant survived the test timeout'));
+		});
+		socket.once('error', error => error.code === 'ECONNREFUSED' ? resolve() : reject(error));
+		socket.setTimeout(5000, () => {
+			socket.destroy();
+			reject(new Error('descendant cleanup probe timed out'));
+		});
+	});
 });
