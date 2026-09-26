@@ -47,14 +47,19 @@ inputs:
 outputs:
   total-urls:
     description: 'Number of URLs tested.'
+    value: ${{ steps.run.outputs.total-urls }}
   passed-urls:
     description: 'Number of URLs with no issues.'
+    value: ${{ steps.run.outputs.passed-urls }}
   total-issues:
     description: 'Total number of issues found across all URLs.'
+    value: ${{ steps.run.outputs.total-issues }}
   passed:
     description: '`true` if the run was within the configured threshold.'
+    value: ${{ steps.run.outputs.passed }}
   report-json:
     description: 'Path to the raw pa11y-ci JSON report written to the runner temp directory.'
+    value: ${{ steps.run.outputs.report-json }}
 
 runs:
   using: 'composite'
@@ -63,6 +68,7 @@ runs:
       shell: bash
       run: npm install --no-save --no-audit --no-fund --prefix "${{ github.action_path }}" "pa11y-ci@${{ inputs.pa11y-ci-version }}"
     - name: Run pa11y-ci-action
+      id: run
       shell: bash
       run: node "${{ github.action_path }}/dist/index.mjs"
       env:
