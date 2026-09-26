@@ -128,3 +128,8 @@ The action is bundled with [esbuild](https://esbuild.github.io/) into a single E
 
 - pa11y-ci's dependency chain (puppeteer via `pa11y`) currently pulls in a vulnerable `extract-zip` ([GHSA-jmr9-qjv8-65gv](https://github.com/advisories/GHSA-jmr9-qjv8-65gv), [GHSA-7pqw-9j4j-h8q3](https://github.com/advisories/GHSA-7pqw-9j4j-h8q3)), used only to unpack the downloaded Chromium build. There's no non-breaking fix upstream at time of writing; `npm audit fix --force` downgrades `pa11y-ci` to `3.1.0`, which is a breaking change. This applies to whatever `pa11y-ci-version` you install, not just this action's default.
 - Each run installs `pa11y-ci` fresh and downloads a Chromium build, since neither is cached between runs. Caching that install (keyed on `pa11y-ci-version`) is a reasonable follow-up if run time becomes a problem.
+- On `ubuntu-latest` runners (Ubuntu 24.04+), Chromium's sandbox fails with `No usable sandbox!` because of an [AppArmor restriction on unprivileged user namespaces](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md). This is a runner/Chromium interaction outside this action's control, and it affects `npx pa11y-ci` and any other puppeteer-based action the same way. Add this step before this action in your workflow:
+
+  ```yaml
+        - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+  ```

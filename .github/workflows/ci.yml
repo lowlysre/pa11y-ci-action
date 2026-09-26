@@ -46,6 +46,11 @@ jobs:
     needs: build-check
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # ubuntu-latest's AppArmor policy blocks Chromium's unprivileged user
+      # namespace sandbox (https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md).
+      # This relaxes it for this ephemeral runner only; see the README's
+      # "Known gaps" section for the same workaround as a consumer.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - id: passing
         uses: ./
         with:
