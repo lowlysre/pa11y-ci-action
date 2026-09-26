@@ -27,13 +27,17 @@ jobs:
   pa11y:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: lowlysre/pa11y-ci-action@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Lets Chromium's sandbox run on ubuntu-latest; see "Known gaps" below.
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - uses: lowlysre/pa11y-ci-action@acce551b1e4a119f2d7c03e8b16a5d4c7e91f0a3 # v1.0.0
         with:
           urls: |
             https://example.com
             https://example.com/about
 ```
+
+Pin to a full commit SHA, not a tag, so a moved or compromised tag can't change what runs. The SHA in these examples is a placeholder; copy the real one for the version you want from the [releases page](https://github.com/lowlysre/pa11y-ci-action/releases).
 
 On a page with issues, the job fails and the run's job summary lists the URL, and its error/warning/notice counts.
 
@@ -48,7 +52,7 @@ If a `.pa11yci`, `.pa11yci.json`, `.pa11yci.js`, or `.pa11yci.cjs` file exists i
 `threshold` is passed straight through to pa11y-ci's own `--threshold` flag: the number of issues permitted before the action fails. Set it above `0` to allow a known baseline of issues while still catching regressions:
 
 ```yaml
-      - uses: lowlysre/pa11y-ci-action@v1
+      - uses: lowlysre/pa11y-ci-action@acce551b1e4a119f2d7c03e8b16a5d4c7e91f0a3 # v1.0.0
         with:
           sitemap: https://example.com/sitemap.xml
           threshold: 5
@@ -59,7 +63,7 @@ If a `.pa11yci`, `.pa11yci.json`, `.pa11yci.js`, or `.pa11yci.cjs` file exists i
 The action installs `pa11y-ci` itself at run time rather than shipping it bundled, so `pa11y-ci-version` accepts any npm version range: pin it for reproducibility, or bump it ahead of this action's own default to pick up an upstream fix or a new pa11y-ci release:
 
 ```yaml
-      - uses: lowlysre/pa11y-ci-action@v1
+      - uses: lowlysre/pa11y-ci-action@acce551b1e4a119f2d7c03e8b16a5d4c7e91f0a3 # v1.0.0
         with:
           urls: https://example.com
           pa11y-ci-version: '4.1.1'
@@ -73,14 +77,16 @@ Set `comment-on-pr: true` on a `pull_request`-triggered run to post or update a 
 on: pull_request
 
 permissions:
+  contents: read
   pull-requests: write
 
 jobs:
   pa11y:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: lowlysre/pa11y-ci-action@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - uses: lowlysre/pa11y-ci-action@acce551b1e4a119f2d7c03e8b16a5d4c7e91f0a3 # v1.0.0
         with:
           urls: https://example.com
           comment-on-pr: true
