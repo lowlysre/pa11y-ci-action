@@ -14,6 +14,7 @@ test('installPa11yCi uses a fresh production dependency manifest for every invoc
 		assert.ok(args.includes('--omit=dev'));
 		assert.ok(args.includes('--ignore-scripts=false'));
 		assert.ok(args.includes('--no-save'));
+		assert.ok(args.includes('--loglevel=error'));
 		assert.deepEqual(JSON.parse(fs.readFileSync(path.join(cwd, 'package.json'))), {
 			private: true, dependencies: {'pa11y-ci': '4.1.1'}
 		});

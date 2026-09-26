@@ -20277,7 +20277,8 @@ async function installPa11yCi(version, {
     "--no-audit",
     "--no-fund",
     "--no-save",
-    "--package-lock=false"
+    "--package-lock=false",
+    "--loglevel=error"
   ], { cwd: directory });
   return createRequire(manifest).resolve("pa11y-ci/bin/pa11y-ci.js");
 }

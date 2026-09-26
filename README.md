@@ -103,7 +103,9 @@ A URL that fails to load fails the action regardless of `threshold`.
 
 ### Pin or upgrade the pa11y-ci version
 
-The action installs `pa11y-ci` in a fresh runtime directory for each invocation. It doesn't install the action's development dependencies, and `NODE_ENV=production` doesn't skip pa11y-ci. The `pa11y-ci-version` input accepts an npm version range. An exact version fixes the top-level package version, but its transitive dependencies can still change between installs.
+The action installs `pa11y-ci` in a fresh runtime directory for each invocation. It doesn't install the action's development dependencies, and `NODE_ENV=production` doesn't skip pa11y-ci. npm installation warnings are suppressed; installation errors still fail the action.
+
+The `pa11y-ci-version` input accepts an npm version range. An exact version fixes the top-level package version, but its transitive dependencies can still change between installs.
 
 ```yaml
       - uses: lowlysre/pa11y-ci-action@acce551b1e4a119f2d7c03e8b16a5d4c7e91f0a3 # v1.0.0

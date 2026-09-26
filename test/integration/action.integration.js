@@ -213,6 +213,7 @@ test('the installer bundle installs pa11y-ci under production omission settings'
 	}, 300_000);
 	assert.equal(result.code, 0, result.stdout + result.stderr);
 	const binary = fs.readFileSync(outputPath, 'utf8').match(/bin-path<<[^\r\n]+\r?\n([^\r\n]+)/)?.[1];
+	assert.doesNotMatch(result.stdout + result.stderr, /npm (warn|http)\b/i);
 	assert.ok(binary && fs.existsSync(binary));
 	const modules = path.resolve(binary, '../../..');
 	assert.equal(fs.existsSync(path.join(modules, 'esbuild')), false);
