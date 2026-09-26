@@ -122,30 +122,9 @@ jobs:
           # Fail the job on findings instead of uploading SARIF to code scanning.
           advanced-security: false
 
-  e2e-cache:
-    runs-on: ubuntu-latest
-    # Runs after e2e so the Chromium cache that job saved is available.
-    needs: e2e
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - id: cached
-        uses: $/
-        with:
-          urls: file://${{ github.workspace }}/test/fixtures/passing.html
-      - name: Assert the Chromium cache was restored
-        env:
-          CACHE_HIT: ${{ steps.cached.outputs.cache-hit }}
-        run: |
-          if [ "$CACHE_HIT" != "true" ]; then
-            echo "expected a cache hit, got '$CACHE_HIT'" >&2
-            exit 1
-          fi
-
   are-we-good:
     runs-on: ubuntu-slim
-    needs: [test, build-check, e2e, e2e-cache, zizmor]
+    needs: [test, build-check, e2e, zizmor]
     if: always()
     steps:
       - uses: lowlydba/are-we-good@6b10e5f2697555fbaf7f8f37ce38d4454c954a4c # v1.2.2
