@@ -9,7 +9,7 @@
 
 # pa11y-ci-action
 
-:robot: A GitHub Action wrapper for [pa11y-ci](https://github.com/pa11y/pa11y-ci): run WCAG accessibility checks against a list of URLs or a sitemap, and get a job summary (and, optionally, a sticky PR comment) instead of raw console output.
+A GitHub Action wrapper for [pa11y-ci](https://github.com/pa11y/pa11y-ci): run WCAG accessibility checks against a list of URLs or a sitemap, and get a job summary (and, optionally, a sticky PR comment) instead of raw console output.
 
 ## Tutorial: quickstart
 
@@ -142,3 +142,7 @@ The action is bundled with [esbuild](https://esbuild.github.io/) into a single E
   ```yaml
         - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
   ```
+
+## Acknowledgements
+
+Thanks to the [pa11y](https://github.com/pa11y) maintainers and contributors, who build pa11y and pa11y-ci. This action only wraps their work. It isn't affiliated with or endorsed by the pa11y project.
