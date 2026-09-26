@@ -1,3 +1,12 @@
+<p align="center">
+  <img src="assets/hero.svg" alt="pa11y-ci-action" width="600">
+</p>
+
+<p align="center">
+  <a href="https://github.com/lowlysre/pa11y-ci-action/actions/workflows/ci.yml"><img src="https://github.com/lowlysre/pa11y-ci-action/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/lowlysre/pa11y-ci-action" alt="License"></a>
+</p>
+
 # pa11y-ci-action
 
 :robot: A GitHub Action wrapper for [pa11y-ci](https://github.com/pa11y/pa11y-ci): run WCAG accessibility checks against a list of URLs or a sitemap, and get a job summary (and, optionally, a sticky PR comment) instead of raw console output.
