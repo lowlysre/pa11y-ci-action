@@ -133,11 +133,8 @@ You can, and plenty of repos do. This wraps that in one `uses:` line with a pinn
 
 ### Design
 
-The action runs pa11y-ci as a separate child process rather than importing it as a library. pa11y-ci is [LGPL-3.0-only licensed](https://github.com/pa11y/pa11y-ci/blob/main/LICENSE); invoking its CLI as a subprocess keeps a clean boundary instead of statically linking LGPL code into this action's bundle.
-
-The action is bundled with [esbuild](https://esbuild.github.io/) into a single ESM `dist/index.mjs`, not [`@vercel/ncc`](https://github.com/vercel/ncc): `ncc` hasn't kept up with the `@actions/*` toolkit's move to ESM-only exports, and can't resolve them.
-
-`pa11y-ci` itself is deliberately *not* part of that bundle. It also brings a native Chromium download via `puppeteer`, which no amount of JS bundling can solve. So `action.yml` is a composite action: an install step runs `npm install --prefix` to fetch the `pa11y-ci-version` you asked for into the action's own directory, then a second step runs the bundled entrypoint against it. This is also what makes `pa11y-ci-version` possible — the version is a runtime install argument, not something baked into a build.
+- pa11y-ci runs as a subprocess, not an imported library, to keep a clean boundary with its [LGPL-3.0 license](https://github.com/pa11y/pa11y-ci/blob/main/LICENSE).
+- It's a composite action: one step installs `pa11y-ci@<pa11y-ci-version>`, the next runs the bundled `dist/index.mjs`. pa11y-ci and its Chromium download aren't bundled.
 
 ### Known gaps
 
