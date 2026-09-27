@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PassThrough} from 'node:stream';
-import {execFile} from 'node:child_process';
-import {execute} from '../helpers/execute.js';
+import {execute, spawnCommand} from '../helpers/execute.js';
 
 function harness() {
 	let callback;
@@ -88,7 +87,7 @@ test('execute terminates a real subprocess that outlives its timeout', {timeout:
 	});
 	await assert.rejects(execute('fixture.js', {...options, timeout: 500}, {
 		start(command, args, options, callback) {
-			child = execFile(command, ['-e', 'console.log("ready"); setInterval(() => {}, 1000);'], options, callback);
+			child = spawnCommand(command, ['-e', 'console.log("ready"); setInterval(() => {}, 1000);'], options, callback);
 			return child;
 		}
 	}), error => {

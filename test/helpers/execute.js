@@ -1,6 +1,41 @@
-import {execFile} from 'node:child_process';
+import {execFile, spawn} from 'node:child_process';
 
 const tail = text => text.slice(-4000);
+
+/**
+ * execFile() does not forward the `detached` option to the spawn() call it
+ * makes internally, so a child launched through it can never be placed in
+ * its own process group: `stopProcessTree`'s group kill would silently no-op
+ * on POSIX. spawn() honors `detached`; this wraps it with the same
+ * (error, stdout, stderr) callback shape execFile gives us.
+ */
+export function spawnCommand(command, args, options, callback) {
+	const child = spawn(command, args, options);
+	let stdout = '';
+	let stderr = '';
+	let settled = false;
+	child.stdout?.setEncoding('utf8').on('data', chunk => { stdout += chunk; });
+	child.stderr?.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
+	child.once('error', error => {
+		if (settled) {
+			return;
+		}
+		settled = true;
+		callback(error, stdout, stderr);
+	});
+	child.once('close', (code, signal) => {
+		if (settled) {
+			return;
+		}
+		settled = true;
+		if (code === 0 && signal === null) {
+			callback(null, stdout, stderr);
+			return;
+		}
+		callback(Object.assign(new Error(`${command} exited with code ${code}, signal ${signal}`), {code, signal}), stdout, stderr);
+	});
+	return child;
+}
 
 function releaseHandles(child) {
 	child.stdin?.destroy();
@@ -40,7 +75,7 @@ function stopProcessTree(child) {
  * is killed. Cleanup still runs, but only to free resources, not to decide
  * when this promise settles.
  */
-export function execute(file, {env, name, timeout = 60_000}, {start = execFile, stop = stopProcessTree, log = console.log} = {}) {
+export function execute(file, {env, name, timeout = 60_000}, {start = spawnCommand, stop = stopProcessTree, log = console.log} = {}) {
 	const startedAt = Date.now();
 	const prefix = `[integration:${name}]`;
 	log(`${prefix} start`);
