@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import {pathToFileURL} from 'node:url';
-import {execFile} from 'node:child_process';
+import {execute} from '../helpers/execute.js';
 
 const root = process.cwd();
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pa11y-ci-integration-'));
@@ -13,61 +13,6 @@ after(() => fs.rmSync(directory, {recursive: true, force: true, maxRetries: 5, r
 const defaults = {chromeLaunchConfig: {args: ['--no-sandbox']}, concurrency: 1};
 const passing = pathToFileURL(path.join(root, 'test/fixtures/passing.html')).href;
 const failing = pathToFileURL(path.join(root, 'test/fixtures/failing.html')).href;
-
-function stopProcessTree(child) {
-	if (process.platform !== 'win32') {
-		try {
-			process.kill(-child.pid, 'SIGKILL');
-		} catch (error) {
-			if (error.code !== 'ESRCH') {
-				throw error;
-			}
-		}
-		return Promise.resolve();
-	}
-	return new Promise((resolve, reject) => {
-		execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], {timeout: 10_000}, (error, stdout, stderr) => {
-			if (error && child.exitCode === null && child.signalCode === null) {
-				reject(new Error(`could not stop test process tree ${child.pid}: ${stderr || stdout}`, {cause: error}));
-				return;
-			}
-			resolve();
-		});
-	});
-}
-
-function execute(env) {
-	const file = path.join(root, 'dist', 'index.mjs');
-	const timeout = 60_000;
-	return new Promise((resolve, reject) => {
-		let termination;
-		const child = execFile(process.execPath, [file], {
-			env, detached: process.platform !== 'win32'
-		}, async (error, stdout, stderr) => {
-			clearTimeout(timer);
-			if (termination) {
-				try {
-					await termination;
-				} catch (terminationError) {
-					reject(terminationError);
-					return;
-				}
-				reject(Object.assign(new Error(`${file} timed out after ${timeout}ms\n${stdout.slice(-4000)}\n${stderr.slice(-4000)}`),
-					{stdout, stderr}));
-				return;
-			}
-			if (error && typeof error.code !== 'number') {
-				reject(error);
-				return;
-			}
-			resolve({code: error?.code ?? 0, stdout, stderr});
-		});
-		const timer = setTimeout(() => {
-			termination = Promise.resolve().then(() => stopProcessTree(child));
-			termination.catch(reject);
-		}, timeout);
-	});
-}
 
 async function run(name, config, inputs = {}) {
 	const configPath = path.join(directory, `${name}.json`);
@@ -78,12 +23,12 @@ async function run(name, config, inputs = {}) {
 	const summaryPath = path.join(directory, `${name}-summary.txt`);
 	fs.writeFileSync(outputPath, '');
 	fs.writeFileSync(summaryPath, '');
-	const result = await execute({
+	const result = await execute(path.join(root, 'dist', 'index.mjs'), {name, env: {
 		...process.env, TEMP: directory, TMP: directory, TMPDIR: directory,
 		INPUT_CONFIG: config ? configPath : '', INPUT_URLS: '', INPUT_SITEMAP: '', INPUT_THRESHOLD: '0',
 		'INPUT_COMMENT-ON-PR': 'false', 'INPUT_WORKING-DIRECTORY': directory,
 		GITHUB_OUTPUT: outputPath, GITHUB_STEP_SUMMARY: summaryPath, ...inputs
-	});
+	}});
 	const outputs = {};
 	for (const match of fs.readFileSync(outputPath, 'utf8').matchAll(/([a-z-]+)<<([^\r\n]+)\r?\n([\s\S]*?)\r?\n\2/g)) {
 		outputs[match[1]] = match[3];

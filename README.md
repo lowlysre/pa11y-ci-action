@@ -218,6 +218,12 @@ You can, and plenty of repos do. This wraps that in one `uses:` line with a pinn
 - The Chromium cache is keyed on the literal `pa11y-ci-version` string. With a range like `^4.0.0`, a newer pa11y-ci that needs a newer Chromium downloads it every run until the range string changes. Pin an exact version to avoid that.
 - The config the action builds from inputs runs Chromium with `--no-sandbox`, because `ubuntu-latest`'s [AppArmor policy](https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md) blocks its sandbox. Only point the action at sites you trust.
 
+## Development
+
+Run `npm ci`, then `npm test` for unit tests and `npm run test:integration` for the bundled action's integration tests. CI runs integration tests on Node 22 through the matrix's `integration` flag; the latest Node release runs unit tests only.
+
+Each integration scenario logs its name, elapsed time, and exit status. Its subprocess has a 60-second deadline; a timeout rejects immediately with the PID and the last 4,000 characters of stdout and stderr, without waiting on the subprocess to actually close, since a descendant holding an inherited pipe open can keep that callback from ever firing. Cleanup (killing the process tree) still runs in the background. The CI integration step has a five-minute limit.
+
 ## Acknowledgements
 
 🙏 Thanks to the [pa11y](https://github.com/pa11y) maintainers and contributors, who build [pa11y](https://github.com/pa11y/pa11y) and [pa11y-ci](https://github.com/pa11y/pa11y-ci). This action only wraps their work. It isn't affiliated with or endorsed by the pa11y project.

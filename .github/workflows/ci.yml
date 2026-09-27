@@ -10,11 +10,15 @@ permissions:
 
 jobs:
   test:
+    name: ${{ matrix.integration && 'Unit + integration tests' || 'Unit tests' }} (${{ matrix.os }}, Node ${{ matrix.node-version }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        node-version: ['22', '24', '26']
+        node-version: ['22', 'latest']
+        include:
+          - node-version: '22'
+            integration: true
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,11 +29,12 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - uses: lowlydba/sustainable-npm@4cc1da285e5a589a7b3816122f791c21ec6ff3e6 # v4.0.0
         with:
-          ignore-scripts: ${{ matrix.node-version != '22' }}
+          ignore-scripts: ${{ !matrix.integration }}
       - run: npm ci
       - run: npm test
       - run: npm run test:integration
-        if: matrix.node-version == '22'
+        if: matrix.integration
+        timeout-minutes: 5
 
   build-check:
     runs-on: ubuntu-latest
