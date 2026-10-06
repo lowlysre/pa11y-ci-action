@@ -19872,6 +19872,9 @@ function issueCommand(command, properties, message) {
   const cmd = new Command(command, properties, message);
   process.stdout.write(cmd.toString() + os.EOL);
 }
+function issue(name, message = "") {
+  issueCommand(name, {}, message);
+}
 var CMD_STRING = "::";
 var Command = class {
   constructor(command, properties, message) {
@@ -21087,6 +21090,12 @@ function warning(message, properties = {}) {
 }
 function info(message) {
   process.stdout.write(message + os5.EOL);
+}
+function startGroup(name) {
+  issue("group", name);
+}
+function endGroup() {
+  issue("endgroup");
 }
 
 // node_modules/@actions/github/lib/context.js
@@ -25403,6 +25412,17 @@ function failureMessage(summary2, threshold) {
   }
   return reasons.length > 0 ? `pa11y-ci ${reasons.join(" and ")}` : null;
 }
+function describeFailures(summary2, report) {
+  return summary2.urls.flatMap(({ url, crashed, message }) => {
+    if (crashed) {
+      return [{ url, lines: [`failed to load: ${message}`] }];
+    }
+    const lines = report.results[url].map((issue2) => `[${issue2.type}] ${issue2.code}: ${issue2.message}
+    selector: ${issue2.selector}
+    context: ${issue2.context}`);
+    return lines.length > 0 ? [{ url, lines }] : [];
+  });
+}
 function escapeMarkdownCell(text) {
   return String(text).replace(/\r\n|\r|\n/g, " ").replace(/&/g, "&amp;").replace(/[\\`*_[\]<>|~]/g, "\\$&").replace(/@/g, "@\u200B");
 }
@@ -25504,6 +25524,13 @@ async function run() {
   setOutput("passed-urls", summary2.passedUrls);
   setOutput("total-issues", summary2.totalIssues);
   setOutput("passed", summary2.passed);
+  for (const { url, lines } of describeFailures(summary2, report)) {
+    startGroup(`${url} (${lines.length} issue(s))`);
+    for (const line of lines) {
+      info(line);
+    }
+    endGroup();
+  }
   await summary.addRaw(buildMarkdown(summary2, { maxBytes: SUMMARY_MAX_BYTES })).write();
   if (commentOnPr) {
     const identity = getInput("comment-id") || JSON.stringify([context2.workflow, context2.job, process.env.GITHUB_ACTION]);

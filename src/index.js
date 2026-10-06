@@ -5,7 +5,7 @@ import * as core from '@actions/core';
 import * as github from '@actions/github';
 import {findConfigPath, buildSyntheticConfig, parseUrlsInput, parseIntegerInput} from './lib/config.js';
 import {runPa11yCi} from './lib/runPa11yCi.js';
-import {summarize, buildMarkdown, failureMessage, commentMarker, COMMENT_MAX_BYTES, SUMMARY_MAX_BYTES} from './lib/report.js';
+import {summarize, describeFailures, buildMarkdown, failureMessage, commentMarker, COMMENT_MAX_BYTES, SUMMARY_MAX_BYTES} from './lib/report.js';
 import {upsertComment, permissionWarning} from './lib/comment.js';
 
 async function run() {
@@ -36,6 +36,14 @@ async function run() {
 	core.setOutput('passed-urls', summary.passedUrls);
 	core.setOutput('total-issues', summary.totalIssues);
 	core.setOutput('passed', summary.passed);
+
+	for (const {url, lines} of describeFailures(summary, report)) {
+		core.startGroup(`${url} (${lines.length} issue(s))`);
+		for (const line of lines) {
+			core.info(line);
+		}
+		core.endGroup();
+	}
 
 	await core.summary.addRaw(buildMarkdown(summary, {maxBytes: SUMMARY_MAX_BYTES})).write();
 
