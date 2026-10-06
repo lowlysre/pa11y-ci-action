@@ -76,6 +76,22 @@ export function failureMessage(summary, threshold) {
 }
 
 /**
+ * List each URL's issues (or load failure) as plain log lines, so a failed
+ * run shows what failed without opening the summary or report file.
+ * Returns `[{url, lines}]` for URLs that have something to report.
+ */
+export function describeFailures(summary, report) {
+	return summary.urls.flatMap(({url, crashed, message}) => {
+		if (crashed) {
+			return [{url, lines: [`failed to load: ${message}`]}];
+		}
+		const lines = report.results[url].map(issue =>
+			`[${issue.type}] ${issue.code}: ${issue.message}\n    selector: ${issue.selector}\n    context: ${issue.context}`);
+		return lines.length > 0 ? [{url, lines}] : [];
+	});
+}
+
+/**
  * Make untrusted text (URLs, page-load errors) safe to drop into a
  * markdown table cell: keep it on one line, stop it from adding columns,
  * links, HTML, or formatting, and stop `@name` from pinging anyone.

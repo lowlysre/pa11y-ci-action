@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {summarize, buildMarkdown, failureMessage, escapeMarkdownCell, commentMarker, COMMENT_MAX_BYTES} from '../../src/lib/report.js';
+import {summarize, describeFailures, buildMarkdown, failureMessage, escapeMarkdownCell, commentMarker, COMMENT_MAX_BYTES} from '../../src/lib/report.js';
 
 function issue(type) {
 	return {code: 'WCAG2AA.Test', type, message: `a ${type}`, context: '<div>', selector: 'div'};
@@ -189,4 +189,19 @@ test('comment markers are stable, scoped, and safe for arbitrary identifiers', (
 	assert.equal(commentMarker('site-a'), commentMarker('site-a'));
 	assert.notEqual(commentMarker('site-a'), commentMarker('site-b'));
 	assert.match(commentMarker('--> @someone\n'), /^<!-- pa11y-ci-action-summary:[a-f0-9]{64} -->$/);
+});
+
+test('describeFailures lists issues and load failures, skipping clean urls', () => {
+	const report = {
+		total: 3,
+		results: {
+			'http://a': [{type: 'error', code: 'C1', message: 'bad', selector: 'img', context: '<img>'}],
+			'http://b': [{message: 'net::ERR'}],
+			'http://c': []
+		}
+	};
+	const out = describeFailures(summarize(report, 0), report);
+	assert.deepEqual(out.map(o => o.url), ['http://a', 'http://b']);
+	assert.match(out[0].lines[0], /\[error\] C1: bad\n\s+selector: img\n\s+context: <img>/);
+	assert.equal(out[1].lines[0], 'failed to load: net::ERR');
 });
