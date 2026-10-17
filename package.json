@@ -23,6 +23,6 @@
     "@actions/exec": "3.0.0",
     "@actions/github": "9.1.1",
     "esbuild": "0.28.2",
-    "pa11y-ci": "4.1.1"
+    "pa11y-ci": "5.0.0"
   }
 }
